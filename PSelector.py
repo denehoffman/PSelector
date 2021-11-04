@@ -372,15 +372,15 @@ void DSelector_{basename}::Finalize(void) {{
 
 if __name__ == "__main__":
     parser_desc = """
-#############################################################
-# Pythonic MakeDSelector                                    #
-# Author: Nathaniel D. Hoffman - Carnegie Mellon University #
-# Created: 3 Nov 2021                                       #
-#                                                           #
-# Use this program as a substitute for MakeDSelector, or    #
-# optionally include a configuration file to handle all     #
-# selections, histograms, analysis actions, and outputs.    #
-#############################################################
+#############################################################\n
+# Pythonic MakeDSelector                                    #\n
+# Author: Nathaniel D. Hoffman - Carnegie Mellon University #\n
+# Created: 3 Nov 2021                                       #\n
+#                                                           #\n
+# Use this program as a substitute for MakeDSelector, or    #\n
+# optionally include a configuration file to handle all     #\n
+# selections, histograms, analysis actions, and outputs.    #\n
+#############################################################\n
 """
     parser = argparse.ArgumentParser(description=parser_desc)
     parser.add_argument("source", help="path to input ROOT file")
@@ -388,20 +388,20 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config", help="(optional) path to configuration file")
     parser.add_argument("-f", "--force", action="store_true", help="force overwriting existing output files")
     args = parser.parse_args()
-    input_path = Path(args["source"]).resolve()
+    input_path = Path(args.source).resolve()
     assert input_path.exists(), f"Could not access {str(input_path)}!"
     treename, branches, particle_map = get_particle_map(str(input_path))
-    if args["name"]:
-        basename = args["name"]
+    if args.name:
+        basename = args.name
     else:
         basename = treename.replace("_Tree", "")
     output_source_path = Path(".") / f"DSelector_{basename}.C"
     output_header_path = Path(".") / f"DSelector_{basename}.h"
-    if not args['force']:
+    if not args.force:
         assert not output_source_path.exists(), f"{str(output_source_path)} already exists in this directory, run with '--force' to overwrite this file!"
         assert not output_header_path.exists(), f"{str(output_header_path)} already exists in this directory, run with '--force' to overwrite this file!"
-    if args['config']:
-        config_path = Path(args['config']).resolve()
+    if args.config:
+        config_path = Path(args.config).resolve()
         assert config_path.exists(), f"Could not access {str(config_path)}!"
     else:
         config_path = None
