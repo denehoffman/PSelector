@@ -49,7 +49,7 @@ def get_header(treename, branches, particle_map, config=None, basename="default"
 
 #include "DSelector/DSelector.h"
 #include "DSelector/DHistogramActions.h"
-#include "DSelector/DCutActions.h
+#include "DSelector/DCutActions.h"
 
 #include "TH1I.h"
 #include "TH2I.h"
@@ -119,7 +119,7 @@ void DSelector_{basename}::Get_ComboWrappers(void) {{
             if not particle.get("particle"):
                 continue
             elif particle.get("name") == "ComboBeam":
-                header_text += "        dComboBeamWrapper = static_cast<DBeamParticle*>(dStep{step_index}Wrapper->Get_InitialParticle());\n"
+                header_text += f"        dComboBeamWrapper = static_cast<DBeamParticle*>(dStep{step_index}Wrapper->Get_InitialParticle());\n"
             elif particle.get("name").startswith("Target"):
                 continue
             elif particle.get("name").startswith("Decaying"):
@@ -242,7 +242,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
             elif particle.get("name") == "ComboBeam":
                 source_text += "        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n" 
                 source_text += "        TLorentzVector locBeamP4_Measured = dComboBeamWrapper->Get_P4_Measured();\n" 
-                source_text += "        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n" 
+                source_text += "        TLorentzVector locBeamX4 = dComboBeamWrapper->Get_X4();\n" 
                 source_text += "        TLorentzVector locBeamX4_Measured = dComboBeamWrapper->Get_X4_Measured();\n" 
             elif particle.get("name").startswith("Target"):
                 continue
@@ -270,7 +270,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     Double_t locAccidentalScalingFactor = dAnalysisUtilities.Get_AccidentalScalingFactor(Get_RunNumber(), locBeamP4.E(), dIsMC);
     Double_t locAccidentalScalingFactorError = dAnalysisUtilities.Get_AccidentalScalingFactorError(Get_RunNumber(), locBeamP4.E());
     Double_t locHistAccidWeightFactor = locRelBeamBucket == 0 ? 1 : -locAccidentalScalingFactor / (2 * locNumOutOfTimeBunchesToUse);
-    if abs(locRelBeamBucket) == 1 {{
+    if (abs(locRelBeamBucket) == 1) {{
         dComboWrapper->Set_IsComboCut(true);
         continue;
     }}
@@ -300,7 +300,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 isFirstFlag = False
                 source_text += f"loc{particle.get('name')}P4_Measured"
         source_text += ";\n"
-        source_text += "double locMissingMassSquared = locMissingP4_Measured.M2();\n"
+    source_text += "double locMissingMassSquared = locMissingP4_Measured.M2();\n"
 
     # Execute Analysis Actions
     source_text += f"""
@@ -332,9 +332,9 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
             elif particle.get("name").startswith("Missing"):
                 continue
             elif particle.get("particle").charge != 0:
-                source_text += f"        locUsedThisCombo_MissingMass[EnumString(PDGtoPType({particle.get('pid')}))].insert(loc{particle.get('name')}TrackID);\n"
+                source_text += f"        locUsedThisCombo_MissingMass[PDGtoPType({particle.get('pid')})].insert(loc{particle.get('name')}TrackID);\n"
             else:
-                source_text += f"        locUsedThisCombo_MissingMass[EnumString(PDGtoPType({particle.get('pid')}))].insert(loc{particle.get('name')}NeutralID);\n"
+                source_text += f"        locUsedThisCombo_MissingMass[PDGtoPType({particle.get('pid')})].insert(loc{particle.get('name')}NeutralID);\n"
         source_text += "\n"
     source_text += """
     if(locUsedSoFar_MissingMass.find(locUsedThisCombo_MissingMass) == locUsedSoFar_MissingMass.end()) {
