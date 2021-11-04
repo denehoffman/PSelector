@@ -3,11 +3,14 @@ import ROOT as root
 import numpy as np
 import argparse
 import re
+from pathlib import Path
 from particle import Particle, ParticleNotFound, InvalidParticle
 
 def get_particle_map(path):
     f = root.TFile(path)
-    tree = f.Get(f.GetListOfKeys()[0].GetName())
+    treename = str(f.GetListOfKeys()[0].GetName())
+    tree = f.Get(treename)
+    branches = [str(key.GetName()) for key in tree.GetListOfKeys()]
     userinfo = tree.GetUserInfo()
     name_to_pid = userinfo.FindObject("NameToPIDMap")
     pos_to_name = userinfo.FindObject("PositionToNameMap")
@@ -36,9 +39,9 @@ def get_particle_map(path):
     output_sorted = []
     for step_list in output:
         output_sorted.append(sorted(step_list, key=lambda d: d.get("index")))
-    return output_sorted
+    return treename, branches, output_sorted
 
-def write_header(particle_map, basename="default"):
+def get_header(treename, branches, particle_map, config=None, basename="default"):
     header_text = f"""#ifndef DSelector_{basename}_h
 #define DSelector_{basename}_h
 
@@ -96,7 +99,7 @@ class DSelector_{basename} : public DSelector {{
             else:
                 header_text += f"        DNeutralTrackHypothesis* d{particle.get('name')}Wrapper;\n"
         header_text += "\n"
-    
+
     # add histograms
     header_text += """        // DEFINE YOUR HISTOGRAMS HERE
         // EXAMPLES:
@@ -129,12 +132,12 @@ void DSelector_{basename}::Get_ComboWrappers(void) {{
             else:
                 header_text += f"        d{particle.get('name')}Wrapper = static_cast<DNeutralTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
         header_text += "\n"
-    
+
     header_text += f"}}\n\n#endif // DSelector_{basename}_h"
 
     return header_text
 
-def write_source(particle_map, basename="default"):
+def get_source(treename, branches, particle_map, config=None, basename="default"):
     source_text = f"""#include "DSelector_{basename}.h"
 
 void DSelector_{basename}::Init(TTree *locTree) {{
@@ -172,7 +175,7 @@ void DSelector_{basename}::Init(TTree *locTree) {{
 """
     # custom main tree stuff
     # custom flat tree stuff
-    
+
     source_text += f"""
     dIsMC = (dTreeInterface->Get_Branch("MCWeight") != NULL);
 
@@ -183,7 +186,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     DSelector::Process(locEntry);
     //cout << "RUN " Get_RunNumber() << ", EVENT " << Get_EventNumber() << endl;
     //TLorentzVector locProductionX4 = Get_X4_Production();
-    
+
     // If the run number changes, use RCDB to get polarization info:
     UInt_t locRunNumber = Get_RunNumber();
     if(locRunNumber != dPreviousRunNumber) {{
@@ -195,7 +198,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     # uniqueness tracking
     source_text += f"""
     Reset_Actions_NewEvent();
-    
+
     set<Int_t> locUsedSoFar_BeamEnergy;
     set<map<Particle_t, set<Int_t>>> locUsedSoFar_MissingMass;
 
@@ -274,7 +277,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
 """
     # Do Cuts
-    
+
     # Missing Mass Squared Calculation
     source_text += "TLorentzVector locMissingP4_Measured = locBeamP4_Measured + dTargetP4;\n"
     source_text += "locMissingP4_Measured -= "
@@ -311,7 +314,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     source_text += """
         if(locUsedSoFar_BeamEnergy.find(locBeamID) == locUsedSoFar_BeamEnergy.end()) {
             dHist_BeamEnergy->Fill(locBeamP4.E());
-            
+
             locUsedSoFar_BeamEnergy.insert(locBeamID);
         }
         map<Particle_t, set<Int_t>> locUsedThisCombo_MissingMass;
@@ -341,7 +344,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
     Fill_NumCombosSurvivedHists();
 """
-    
+
     # Fill output tree
     source_text += """
     Bool_t locIsEventCut = true;
@@ -364,8 +367,47 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 void DSelector_{basename}::Finalize(void) {{
     DSelector::Finalize();
 }}"""
-    
+
     return source_text
 
 if __name__ == "__main__":
-    print(write_source(get_particle_map("demo.root")))
+    parser_desc = """
+#############################################################
+# Pythonic MakeDSelector                                    #
+# Author: Nathaniel D. Hoffman - Carnegie Mellon University #
+# Created: 3 Nov 2021                                       #
+#                                                           #
+# Use this program as a substitute for MakeDSelector, or    #
+# optionally include a configuration file to handle all     #
+# selections, histograms, analysis actions, and outputs.    #
+#############################################################
+"""
+    parser = argparse.ArgumentParser(description=parser_desc)
+    parser.add_argument("source", help="path to input ROOT file")
+    parser.add_argument("-n", "--name", help="(optional) name for selector class and files, i.e. \"DSelector_<name>.C/.h\". Defaults to tree name without \"_Tree\"")
+    parser.add_argument("-c", "--config", help="(optional) path to configuration file")
+    parser.add_argument("-f", "--force", action="store_true", help="force overwriting existing output files")
+    args = parser.parse_args()
+    input_path = Path(args["source"]).resolve()
+    assert input_path.exists(), f"Could not access {str(input_path)}!"
+    treename, branches, particle_map = get_particle_map(str(input_path))
+    if args["name"]:
+        basename = args["name"]
+    else:
+        basename = treename.replace("_Tree", "")
+    output_source_path = Path(".") / f"DSelector_{basename}.C"
+    output_header_path = Path(".") / f"DSelector_{basename}.h"
+    if not args['force']:
+        assert not output_source_path.exists(), f"{str(output_source_path)} already exists in this directory, run with '--force' to overwrite this file!"
+        assert not output_header_path.exists(), f"{str(output_header_path)} already exists in this directory, run with '--force' to overwrite this file!"
+    if args['config']:
+        config_path = Path(args['config']).resolve()
+        assert config_path.exists(), f"Could not access {str(config_path)}!"
+    else:
+        config_path = None
+    print(f"Generating {str(output_source_path)} and {str(output_header_path)}...")
+    if config_path:
+        print(f"Using {str(config_path)} to supplement DSelector generation")
+    with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
+        source.write(get_source(treename, branches, particle_map, config=config, basename=basename))
+        header.write(get_header(treename, branches, particle_map, config=config, basename=basename))
