@@ -409,5 +409,5 @@ if __name__ == "__main__":
     if config_path:
         print(f"Using {str(config_path)} to supplement DSelector generation")
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
-        source.write(get_source(treename, branches, particle_map, config=config, basename=basename))
-        header.write(get_header(treename, branches, particle_map, config=config, basename=basename))
+        source.write(get_source(treename, branches, particle_map, config=config_path, basename=basename))
+        header.write(get_header(treename, branches, particle_map, config=config_path, basename=basename))
