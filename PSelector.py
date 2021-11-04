@@ -10,7 +10,7 @@ def get_particle_map(path):
     f = root.TFile(path)
     treename = str(f.GetListOfKeys()[0].GetName())
     tree = f.Get(treename)
-    branches = [str(key.GetName()) for key in tree.GetListOfKeys()]
+    branches = [str(key.GetName()) for key in tree.GetListOfBranches()]
     userinfo = tree.GetUserInfo()
     name_to_pid = userinfo.FindObject("NameToPIDMap")
     pos_to_name = userinfo.FindObject("PositionToNameMap")
