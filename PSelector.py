@@ -299,7 +299,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                     source_text += " + "
                 isFirstFlag = False
                 source_text += f"loc{particle.get('name')}P4_Measured"
-        source_text += ";\n"
+    source_text += ";\n"
     source_text += "double locMissingMassSquared = locMissingP4_Measured.M2();\n"
 
     # Execute Analysis Actions
