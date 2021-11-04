@@ -260,7 +260,19 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 source_text += f"        TLorentzVector loc{particle.get('name')}X4_Measured = d{particle.get('name')}Wrapper->Get_X4_Measured();\n"
         source_text += "\n"
 
+    # Old Accidental Weighting
+    n_out_of_time = -1
+    num_from_treename = re.search("_B(\d+)", treename).group(1)
+    if num_from_treename:
+        n_out_of_time = int(num_from_treename)
+    source_text += f"""
+    Double_t locDeltaT_RF = dAnalysisUtilities.Get_DeltaT_RF(Get_RunNumber(), locBeamX4_Measured, dComboWrapper);
+    Double_t locAccidentalWeightFactor = (fabs(locDeltaT_RF) > 0.5 * 4.008) ? -1/{2 * n_out_of_time} : 1;
+
+"""
+
     # Accidental Weighting
+    ''' # BROKEN CCDB, RCDB and CCDB use mismatched versions of python2/3. Running on pure python2 gives a "malloc(): corrupted top size" err, running on python3 gives import errors for the following code. The solution? Do it the old way...
     source_text += f"""
     Double_t locBunchPeriod = dAnalysisUtilities.Get_BeamBunchPeriod(Get_RunNumber());
     Double_t locDeltaT_RF = dAnalysisUtilities.Get_DeltaT_RF(Get_RunNumber(), locBeamX4_Measured, dComboWrapper);
@@ -276,11 +288,12 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     }}
 
 """
+    '''
     # Do Cuts
 
     # Missing Mass Squared Calculation
-    source_text += "TLorentzVector locMissingP4_Measured = locBeamP4_Measured + dTargetP4;\n"
-    source_text += "locMissingP4_Measured -= "
+    source_text += "    TLorentzVector locMissingP4_Measured = locBeamP4_Measured + dTargetP4;\n"
+    source_text += "    locMissingP4_Measured -= "
     isFirstFlag = True
     for step_index, step_contents in enumerate(particle_map):
         for particle in step_contents:
@@ -300,7 +313,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 isFirstFlag = False
                 source_text += f"loc{particle.get('name')}P4_Measured"
     source_text += ";\n"
-    source_text += "double locMissingMassSquared = locMissingP4_Measured.M2();\n"
+    source_text += "    double locMissingMassSquared = locMissingP4_Measured.M2();\n"
 
     # Execute Analysis Actions
     source_text += f"""
