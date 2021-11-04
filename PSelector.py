@@ -267,7 +267,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         n_out_of_time = int(num_from_treename)
     source_text += f"""
     Double_t locDeltaT_RF = dAnalysisUtilities.Get_DeltaT_RF(Get_RunNumber(), locBeamX4_Measured, dComboWrapper);
-    Double_t locAccidentalWeightFactor = (fabs(locDeltaT_RF) > 0.5 * 4.008) ? -1/{2 * n_out_of_time} : 1;
+    Double_t locHistAccidWeightFactor = (fabs(locDeltaT_RF) > 0.5 * 4.008) ? -1/{2 * n_out_of_time} : 1;
 
 """
 
