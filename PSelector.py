@@ -104,7 +104,7 @@ class DSelector_{basename} : public DSelector {{
             elif particle.get("particle").charge != 0:
                 header_text += f"        DChargedTrackHypothesis* d{particle.get('name')}Wrapper;\n"
             else:
-                header_text += f"        DNeutralTrackHypothesis* d{particle.get('name')}Wrapper;\n"
+                header_text += f"        DNeutralParticleHypothesis* d{particle.get('name')}Wrapper;\n"
         header_text += "\n"
 
     ###################################### add histograms
@@ -138,7 +138,7 @@ void DSelector_{basename}::Get_ComboWrappers(void) {{
             elif particle.get("particle").charge != 0:
                 header_text += f"        d{particle.get('name')}Wrapper = static_cast<DChargedTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
             else:
-                header_text += f"        d{particle.get('name')}Wrapper = static_cast<DNeutralTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
+                header_text += f"        d{particle.get('name')}Wrapper = static_cast<DNeutralParticleHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
         header_text += "\n"
 
     header_text += f"}}\n\n#endif // DSelector_{basename}_h"
