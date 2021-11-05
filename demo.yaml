@@ -1,28 +1,59 @@
 ---
+code:
+  - "Double_t locConfidenceLevel, loclog10ConfidenceLevel;"
+  - "locConfidenceLevel = dComboWrapper->Get_ConfidenceLevel_KinFit(\"\");"
+  - "loclog10ConfidenceLevel = log10(locConfidenceLevel);"
+  - "if(locConfidenceLevel < 1e-20) {"
+  - "    dComboWrapper->Set_IsComboCut(true);"
+  - "    continue;"
+  - "}"
+  - "TLorentzVector locDecayingKShort2P4 = locDecayingPi01P4 + locDecayingPi02P4;"
+  - "TLorentzVector locDecayingPi01P4_Measured = locPhoton1P4_Measured + locPhoton2P4_Measured;"
+  - "TLorentzVector locDecayingPi02P4_Measured = locPhoton1P4_Measured + locPhoton2P4_Measured;"
+  - "TLorentzVector locDecayingPi01altP4_Measured = locPhoton1P4_Measured + locPhoton3P4_Measured;"
+  - "TLorentzVector locDecayingPi02altP4_Measured = locPhoton2P4_Measured + locPhoton4P4_Measured;"
+  - "TLorentzVector locMesonHypoP4 = locDecayingKShort1P4 + locDecayingKShort2P4;"
 histograms:
-    MissingMassSquared:
-        x: locMissingMassSquared
-        xrange: [-0.06, 0.06]
-        xbins: 600
-        title: ""
-        xlabel: "Missing Mass Squared (GeV/c^{2})^{2}"
-    MissingEnergy:
-        x: locMissingEnergy
-        xrange: [-0.1, 0.1]
-        xbins: 600
-        title: ""
-        xlabel: "Missing Energy (GeV)"
-    Test: {xhist: MissingMassSquared, yhist: MissingEnergy}
-    SomeOtherThirdThing:
-        x: locMissingMassSquared
-        xrange: [-0.06, 0.06]
-        xbins: 600
-        xlabel: "Missing Mass Squared (GeV/c^{2})^{2}"
-        y: locMissingEnergy
-        yrange: [-0.1, 0.1]
-        ybins: 600
-        xlabel: "Missing Energy (GeV)"
-        title: "Correlation"
-        uniqueness: beam
-        weight: newweight
+  Log10KinFitCL:
+    x: "loclog10ConfidenceLevel"
+    xrange: [-50, 0]
+    xbins: 50
+    xlabel: "Log10 of Kinematic Fit Confidence Level"
+  KShort1InvMass:
+    x: "locDecayingKShort1P4.M()"
+    xrange: [0.3, 0.7]
+    xbins: 100
+    xlabel: "K_{S,1}^{0} Invariant Mass (GeV/c^{2})"
+  KShort2InvMass:
+    xhist: KShort1InvMass
+    x: "locDecayingKShort2P4.M()"
+    xlabel: "K_{S,2}^{0} Invariant Mass (GeV/c^{2})"
+  Pi01InvMass:
+    x: "locDecayingPi01P4.M()"
+    xrange: [0.0, 0.4]
+    xbins: 100
+    xlabel: "#gamma_{1}#gamma_{2} Invariant Mass (GeV/c^{2})"
+  Pi02InvMass:
+    xhist: Pi01InvMass
+    x: "locDecayingPi02P4.M()"
+    xlabel: "#gamma_{3}#gamma_{4} Invariant Mass (GeV/c^{2})"
+  Pi01altInvMass:
+    xhist: Pi01InvMass
+    x: "locDecayingPi01altP4.M()"
+    xlabel: "#gamma_{1}#gamma_{3} Invariant Mass (GeV/c^{2})"
+  Pi02altInvMass:
+    xhist: Pi01InvMass
+    x: "locDecayingPi02altP4.M()"
+    xlabel: "#gamma_{2}#gamma_{4} Invariant Mass (GeV/c^{2})"
+  Pi01InvMassVsPi02InvMass:
+    xhist: Pi01InvMass
+    yhist: Pi02InvMass
+  Pi01altInvMassVsPi02altInvMass:
+    xhist: Pi01altInvMass
+    yhist: Pi02altInvMass
+  KsKsInvMass:
+    x: "locMesonHypoP4.M()"
+    xrange: [0.9, 2.2]
+    xbins: 130
+    xlabel: "K_{S,1}^{0}K_{S,2}^{0} Invariant Mass (GeV/c^{2})"
 ...
