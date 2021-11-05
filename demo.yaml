@@ -1,0 +1,28 @@
+---
+histograms:
+    MissingMassSquared:
+        x: locMissingMassSquared
+        xrange: [-0.06, 0.06]
+        xbins: 600
+        title: ""
+        xlabel: "Missing Mass Squared (GeV/c^{2})^{2}"
+    MissingEnergy:
+        x: locMissingEnergy
+        xrange: [-0.1, 0.1]
+        xbins: 600
+        title: ""
+        xlabel: "Missing Energy (GeV)"
+    Test: {xhist: MissingMassSquared, yhist: MissingEnergy}
+    SomeOtherThirdThing:
+        x: locMissingMassSquared
+        xrange: [-0.06, 0.06]
+        xbins: 600
+        xlabel: "Missing Mass Squared (GeV/c^{2})^{2}"
+        y: locMissingEnergy
+        yrange: [-0.1, 0.1]
+        ybins: 600
+        xlabel: "Missing Energy (GeV)"
+        title: "Correlation"
+        uniqueness: beam
+        weight: newweight
+...
