@@ -390,7 +390,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                         source_text += f"            dHist_{hist_name}->Fill({hist_info.x}, {hist_info.y}, {hist_info.weight});\n"
                     else:
                         source_text += f"            dHist_{hist_name}->Fill({hist_info.x}, {hist_info.weight});\n"
-                source_text += f"            locUsedSoFar_{uniq_name}.insert(locUsedThisCombo{uniq_name});        \n        }}\n"
+                source_text += f"            locUsedSoFar_{uniq_name}.insert(locUsedThisCombo_{uniq_name});        \n        }}\n"
             else: # custom but more than one particle
                 source_text += f"        map<Particle_t, set<Int_t>> locUsedThisCombo_{uniq_name};\n"
                 for tracked_particle in uniq_info.particles:
@@ -412,7 +412,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                         source_text += f"            dHist_{hist_name}->Fill({hist_info.x}, {hist_info.y}, {hist_info.weight});\n"
                     else:
                         source_text += f"            dHist_{hist_name}->Fill({hist_info.x}, {hist_info.weight});\n"
-                source_text += f"            locUsedSoFar_{uniq_name}.insert(locUsedThisCombo{uniq_name});        \n       }}\n"
+                source_text += f"            locUsedSoFar_{uniq_name}.insert(locUsedThisCombo_{uniq_name});        \n       }}\n"
 
     source_text += "    } // End of Combo Loop\n\n    Fill_NumCombosSurvivedHists();\n"
 
