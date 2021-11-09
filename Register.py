@@ -102,3 +102,9 @@ class CodeRegister:
         self.code = []
         if lines:
             self.code = lines
+
+class Frame:
+    def __init__(self, **kwargs):
+        self.particles = kwargs.get("particles")
+        self.initial = kwargs.get("from")
+        
