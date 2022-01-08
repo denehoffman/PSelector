@@ -57,7 +57,10 @@ class HistogramRegister:
         hist_dict["BeamEnergy"] = {"x": "locBeamP4.E()", "xrange": [0.0, 12.0], "xbins":600, "xlabel": "Beam Energy (GeV)"}
         self.histograms = {hist_name: Histogram(**hist_info) for hist_name, hist_info in hist_dict.items()}
         for hist_name, histogram in self.histograms.items():
-            histogram.resolve(self.histograms)
+            try:
+                histogram.resolve(self.histograms)
+            except:
+                print(f"Error in parsing histogram {hist_name}")
             assert histogram.is_valid(), f"Invalid histogram: {hist_name}!"
 
     def get_hist_names(self):
