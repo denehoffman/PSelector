@@ -359,17 +359,17 @@ def get_particle_map(path):
 
 def main():
     parser_desc = """
-#############################################################\n
-# Pythonic MakeDSelector                                    #\n
-# Author: Nathaniel D. Hoffman - Carnegie Mellon University #\n
-# Created: 3 Nov 2021                                       #\n
-#                                                           #\n
-# Use this program as a substitute for MakeDSelector, or    #\n
-# optionally include a configuration file to handle all     #\n
-# selections, histograms, analysis actions, and outputs.    #\n
-#############################################################\n
+╭───────────────────────────────────────────────────────────╮
+│ MakePSelector: A Pythonic MakeDSelector                                    │
+│ Author: Nathaniel D. Hoffman - Carnegie Mellon University │
+│ Created: 3 Nov 2021                                       │
+│                                                           │
+│ Use this program as a substitute for MakeDSelector, or    │
+│ optionally include a configuration file to handle all     │
+│ selections, histograms, analysis actions, and outputs.    │
+╰───────────────────────────────────────────────────────────╯
 """
-    parser = argparse.ArgumentParser(description=parser_desc)
+    parser = argparse.ArgumentParser(description=parser_desc, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("config", help="path to configuration file")
     parser.add_argument("-n", "--name", help="(optional) name for selector class and files, i.e. \"DSelector_<name>.C/.h\". Defaults to tree name without \"_Tree\"")
     parser.add_argument("-f", "--force", action="store_true", help="force overwriting existing output files")
