@@ -23,11 +23,16 @@ class Uniqueness:
                         continue
                     else:
                         self.particles.append(particle.get("name"))
+        elif self.particles == "none":
+            self.tag = "_allcombos"
+            self.particles = []
         else:
             self.tag = f"_{name}"
 
     def init_string(self, indent=1):
-        if len(self.particles) == 1:
+        if len(self.particles) == 0:
+            return "    " * indent + "// Some histograms will be generated without uniqueness tracking\n"
+        elif len(self.particles) == 1:
             return "    " * indent + f"set<Int_t> locUsedSoFar_{self.name};\n"
         else:
             return "    " * indent + f"set<map<Particle_t, set<Int_t>>> locUsedSoFar_{self.name};\n"
@@ -48,7 +53,11 @@ class Uniqueness:
 
     def fill_string(self, indent=2):
         outstring = ""
-        if len(self.particles) == 1:
+        if len(self.particles) == 0:
+            for hist_name in self.histograms:
+                hist = Histogram(hist_name, self.config)
+                outstring += hist.fill_string(tag=self.tag, indent=indent)
+        elif len(self.particles) == 1:
             if self.particles[0] == "Beam":
                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}ID) == locUsedSoFar_{self.name}.end()) {{\n"
             else:
@@ -63,6 +72,7 @@ class Uniqueness:
                 hist = Histogram(hist_name, self.config)
                 outstring += hist.fill_string(tag=self.tag, indent=indent+1)
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(loc{self.particles[0]}ID);\n"
+            outstring += "    " * indent + "}\n"
         else:
             outstring += "    " * indent + f"map<Particle_t, set<Int_t>> locUsedThisCombo_{self.name};\n"
             for tracked_particle in self.particles:
@@ -81,7 +91,7 @@ class Uniqueness:
                 hist = Histogram(hist_name, self.config)
                 outstring += hist.fill_string(tag=self.tag, indent=indent+1)
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(locUsedThisCombo_{self.name});\n"
-        outstring += "    " * indent + "}\n"
+            outstring += "    " * indent + "}\n"
         return outstring
 
 class Histogram:
@@ -230,3 +240,53 @@ class Weight:
             outstring += "    " * (indent + 1) + "}\n"
             outstring += "    " * indent + "}\n"
         return outstring
+
+class FlatBranch:
+    def __init__(self, name, config):
+        self.name = name
+        self.config = config
+        self.branch_config = self.config['output'][name]
+        self.isArray = bool(self.branch_config.get('array'))
+        self.num_name = ""
+        if self.isArray:
+            self.num_name = f"Num{self.branch_config['array']['name']}"
+
+    def init_string(self, indent=1):
+        outstring = "    " * indent + f"// Create Flat {self.name} branch\n"
+        if self.isArray:
+            array_config = self.branch_config['array']
+            dtype = self.branch_config['type']
+            array_name = array_config['name']
+            array_values = array_config['values']
+            outstring += "    " * indent + f"""dFlatTreeInterface->Create_Branch_FundamentalArray<{dtype}>("{self.branch_config['name']}_{array_name}", "{self.num_name}");\n"""
+        else:
+            dtype = self.branch_config['type']
+            outstring += "    " * indent + f"""dFlatTreeInterface->Create_Branch_Fundamental<{dtype}>("{self.branch_config['name']}");\n"""
+        return outstring
+
+
+    def init_num_string(self, indent=1):
+        return "    " * indent + f"""dFlatTreeInterface->Create_Branch_Fundamental<Int_t>("{self.num_name}");\n"""
+
+
+    def fill_string(self, indent=2):
+        outstring = "    " * indent + f"// Fill Flat {self.name} branch\n"
+        if self.isArray:
+            array_config = self.branch_config['array']
+            dtype = self.branch_config['type']
+            array_name = array_config['name']
+            array_values = array_config['values']
+            num_name = f"Num{self.branch_config['name']}"
+            for i, value in enumerate(array_values):
+                outstring += "    " * indent + f"""dFlatTreeInterface->Fill_Fundamental<{dtype}>("{self.branch_config['name']}_{array_name}", {array_values[i]}, {i});\n"""
+        else:
+            dtype = self.branch_config['type']
+            value = self.branch_config['value']
+            outstring += "    " * indent + f"""dFlatTreeInterface->Fill_Fundamental<{dtype}>("{self.branch_config['name']}", {value});\n"""
+        return outstring
+
+
+    def fill_num_string(self, indent=2):
+        array_config = self.branch_config['array']
+        array_values = array_config['values']
+        return "    " * indent + f"""dFlatTreeInterface->Fill_Fundamental<Int_t>("{self.num_name}", {len(array_values)});\n"""

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight
+from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight, FlatBranch
 import ROOT as root
 import json
 import argparse
@@ -108,10 +108,19 @@ def get_source(treename, particle_map, config, basename="default", cut_accidenta
 void DSelector_{basename}::Init(TTree *locTree) {{
 
     dOutputFileName = "hist_{basename}.root";
-    dOutputTreeFileName = "tree_{basename}.root";
+    dOutputTreeFileName = "tree_{basename}.root";"""
+    
+    if config.get("output"):
+        source_text += f"""
+    dFlatTreeFileName = "flat_{basename}.root";
+    dFlatTreeName = "kin";
+    dSaveDefaultFlatBranches = false;"""
+    else:
+        source_text += f"""
     dFlatTreeFileName = "";
-    dFlatTreeName = "";
+    dFlatTreeName = "";"""
 
+    source_text += """
     bool locInitializedPriorFlag = dInitializedFlag;
     DSelector::Init(locTree);
     if(locInitializedPriorFlag) {{
@@ -140,6 +149,21 @@ void DSelector_{basename}::Init(TTree *locTree) {{
 
     ###################################### custom main tree stuff
     ###################################### custom flat tree stuff
+
+    if config.get("output"):
+        num_names = []
+        source_text += """
+    // Event labeling branches
+    dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("RunNumber");
+    dFlatTreeInterface->Create_Branch_Fundamental<ULong64_t>("EventNumber");
+    dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("ComboNumber");
+"""
+        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+            if flatbranch.isArray:
+                if not flatbranch.num_name in num_names:
+                    num_names.append(flatbranch.num_name)
+                    source_text += flatbranch.init_num_string()
+            source_text += flatbranch.init_string()
 
     source_text += f"""
     dIsMC = (dTreeInterface->Get_Branch("MCWeight") != NULL);
@@ -293,6 +317,25 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     # Fill Histograms
     for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
         source_text += uniqueness.fill_string()
+
+    # Fill FlatTree (if applicable)
+
+    if config.get("output"):
+        source_text += """
+        // Fill labeling branches
+        dFlatTreeInterface->Fill_Fundamental<UInt_t>("RunNumber", locRunNumber);
+        dFlatTreeInterface->Fill_Fundamental<ULong64_t>("EventNumber", Get_EventNumber());
+        dFlatTreeInterface->Fill_Fundamental<UInt_t>("ComboNumber", loc_i);
+"""
+        num_names = []
+        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+            if flatbranch.isArray:
+                if not flatbranch.num_name in num_names:
+                    num_names.append(flatbranch.num_name)
+                    source_text += flatbranch.fill_num_string()
+            source_text += flatbranch.fill_string()
+        source_text += "        Fill_FlatTree();\n"
+
     # End Combo Loop
     source_text += "    } // End of Combo Loop\n\n    Fill_NumCombosSurvivedHists();\n"
 
@@ -360,7 +403,7 @@ def get_particle_map(path):
 def main():
     parser_desc = """
 ╭───────────────────────────────────────────────────────────╮
-│ MakePSelector: A Pythonic MakeDSelector                                    │
+│ MakePSelector: A Pythonic MakeDSelector                   │
 │ Author: Nathaniel D. Hoffman - Carnegie Mellon University │
 │ Created: 3 Nov 2021                                       │
 │                                                           │
