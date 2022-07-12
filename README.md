@@ -25,200 +25,276 @@ optional arguments:
 - `--cut-accidentals` switches the treatment of accidentals from the default (subraction by weighting them as -1/n where n is the number of out-of-time peaks) to selecting only the central beam peak.
 
 ## Writing a Configuration File
-Configuration files for `MakePSelector` are written in JSON (JavaScript Object Notation). This format was chosen because it is human-parsable and the `json` package is part of the standard `python3` library (unlike `yaml`). The [JSON homepage](https://www.json.org/) has a good explanation of how the format works.
+Configuration files for `MakePSelector` are written in TOML (Tom's Obvious, Minimal Language). This project originally used JSON, but the most recent update uses TOML because of the ability to write comments and multiline strings.
 ### Minimum Configuration:
-```json
-{
-    "source": "path/to/source.root",
-    "vectors": {},
-    "boosts": {},
-    "variables": {},
-    "cuts": {},
-    "weights": {},
-    "uniqueness": {},
-    "histograms": {}
-}
+```toml
+source = "path/to/source.root"
+[vectors]
+[boosts]
+[variables]
+[cuts]
+[weights]
+[uniqueness]
+[histograms]
 ```
 #### source
 This field contains the (absolute) path to the template `ROOT` file containing a GlueX-formatted data `TTree`. `MakeDSelector` also inputs such a template file, but `MakePSelector` is intended to be run each time the configuration file is changed, so it would be an unneccessary hassle to have to type in the path every time.
 
 #### vectors
 This field contains a dictionary containing recipes to create `TLorentzVectors` which can be boosted along with the 4-momenta/4-positions which are created by default for each particle. For instance,
-```json
-{
-    "vectors": {
-        "locDecayingKShort1P4_Measured": "locPiMinus1P4_Measured + locPiPlus1P4_Measured",
-        "locDecayingKShort2P4_Measured": "locPiMinus2P4_Measured + locPiPlus2P4_Measured",
-        "locMesonHypoP4_Measured": "locDecayingKShort1P4_Measured + locDecayingKShort2P4_Measured"
-    }
-}
+```toml
+[vectors]
+locMesonHypoP4 = "locDecayingKShort1P4 + locDecayingKShort2P4"
+locSigmaHypo1P4 = "locDecayingKShort1P4 + locProtonP4"
+locSigmaHypo2P4 = "locDecayingKShort2P4 + locProtonP4"
 ```
-creates two new `TLorentzVectors` from the sums of others.
+creates three new `TLorentzVectors` from the sums of others.
 
 #### boosts
 This field describes boost frames and their relation to one another. Boosts can be nested to refer to boosts which happen in a specific order (boost order does not commute!). Example:
-```json
-{
-    "boosts": {
-        "COM": {
-            "boostvector": "locBeamP4 + dTargetP4",
-            "boosts": {
-                "MESON": {
-                    "boostvector": "locMesonHypoP4_Measured"
-                }
-            }
-        }
-    }
-}
+```toml
+[boosts.COM]
+boostvector = "locBeamP4 + dTargetP4"
+
+[boosts.COM.boosts.MESON]
+boostvector = "locMesonHypoP4_Measured"
 ```
 Here, `COM` is the name given to the center-of-momentum frame. It is also the suffix added to `TLorentzVector`s which are boosted to this frame. For instance, a vector called `locPiMinus1P4_Measured` will become `locPiMinus1P4_Measured_COM`. Each named boost contains at least one field called `boostvector` which describes the 4-vector for the boost. In this example, we are adding the beam momentum to the target momentum to get the center of momentum. We can also nest `boost` fields inside each other. Here, the `MESON` boost follows the `COM` boost. Be sure to use `boostvector` names which *do not* include boosted tags, as these will be added automatically (there is no need to use `locMesonHypoP4_Measured_COM` to describe the boost vector here, this will be made implicit in the DSelector code).
 
 One can use any of the default `TLorentzVector`s as well as any vector defined in the `vectors` field for a boost vector.
 
 #### variables
-This field contains any raw code to add directly to the DSelector. Unfortunately, one of the limitations of the `JSON` format is that newlines are not interpreted in strings (although if you wish to write `\n` after every line, you are free to do so). Instead, the code is specified through a list of strings:
-```json
-{
-    "variables": {
-        "confidence_level": ["Double_t locConfidenceLevel, loclog10ConfidenceLevel;",
-            "locConfidenceLevel = dComboWrapper->Get_ConfidenceLevel_KinFit(\"\");",
-            "loclog10ConfidenceLevel = log10(locConfidenceLevel);"],
-        "MMS": ["TLorentzVector locMissingP4 = locBeamP4_Measured + dTargetP4 - locProtonP4_Measured - locPiMinus1P4_Measured - locPiPlus1P4_Measured - locPiMinus2P4_Measured - locPiPlus2P4_Measured;"],
-    }
-}
+This field contains any raw code to add directly to the DSelector:
+```toml
+[variables]
+confidence_level = """
+Double_t locChiSqDOF, locConfidenceLevel, loclog10ConfidenceLevel;
+locChiSqDOF = dComboWrapper->Get_ChiSq_KinFit("") / dComboWrapper->Get_NDF_KinFit("");
+locConfidenceLevel = dComboWrapper->Get_ConfidenceLevel_KinFit("");
+loclog10ConfidenceLevel = log10(locConfidenceLevel);
+"""
+MMS = """
+TLorentzVector locMissingP4 = locBeamP4_Measured + dTargetP4 - locProtonP4_Measured - locPiMinus1P4_Measured - locPiPlus1P4_Measured - locPiMinus2P4_Measured - locPiPlus2P4_Measured;
+"""
 ```
-Each "variable" should be given a name (this makes the coding easier but also helps with the organization and readability of the final C code). All of these code blocks are inserted verbatim into the DSelector combo loop and can use any vectors (and their boosted forms) declared in the `vectors` field. The code sample here describes how to get variables like the confidence level and missing mass squared.
+Each "variable" should be given a name (this makes the coding easier but also helps with the organization and readability of the final C code). All of these code blocks are inserted verbatim into the DSelector combo loop and can use any vectors (and their boosted forms) declared in the `vectors` field. The code sample here describes how to get variables like the confidence level and missing mass squared. Note that they are written in the same order as the configuration file, so the order will matter if you define a variable in one block and use it in another.
 
 #### cuts
 Perhaps the most important field, this allows for specification and toggling of various data selections. Each cut has an `enabled` field (true/false) and a `condition` field (a boolean which must be met for the combo to be cut). All cut language is exclusive by default, meaning that if the condition is true, the combo will be cut, and if it is false, it will be kept (in contrast to language where a selection is made, i.e. a condition being true results in the combo being selected or kept). Here is an example of a group of cuts which remove different portions of the data based on confidence level:
-```json
-{
-    "cuts": {
-        "confidence_level": {
-            "enabled": false,
-            "condition": "locConfidenceLevel < 1e-4"
-        },
-        "select_hc": {
-            "enabled": true,
-            "condition": "locConfidenceLevel < 1e-9"
-        },
-        "select_lc": {
-            "enabled": false,
-            "condition": "locConfidenceLevel > 1e-10 || locConfidenceLevel < 1e-20"
-        }
-    }
-}
+```toml
+[cuts] # this table header is optional
+[cuts.confidence_level]
+enabled = true
+condition = "locConfidenceLevel < 1e-4"
+
+[cuts.select_hc]
+enabled = false
+condition = "locConfidenceLevel < 1e-9"
+
+[cuts.select_lc]
+enabled = false
+condition = "locConfidenceLevel > 1e-10 || locConfidenceLevel < 1e-20"
 ```
-Here, only one cut is enabled, so the others will not enter the final DSelector code at all. The enabled cut removes all combos with `locConfidenceLevel` less than `1e-9` (thus selecting high-confidence events).
+Here, only one cut is enabled, so the others will not enter the final DSelector code at all. The enabled cut removes all combos with `locConfidenceLevel` less than `1e-4` (thus selecting high-confidence events).
 
 #### weights
 The `weights` field can be used to assign different weights based on conditional statements (such as a sideband subtraction).
-```json
-{
-    "some_weight": {
-        "enabled": true,
-        "weight": "0.3",
-        "condition": "true"
-    },
-    "another_weight": {
-        "enabled": true,
-        "weight": "my_factor",
-        "condition": "locConfidenceLevel > 1e-9",
-        "code": ["Double_t my_factor = 0.4;",
-                 "if(locConfidenceLevel < 1e-4) {",
-                 "    my_factor = 0.2;"
-                 "}"]
-    }
+```toml
+[weights] # again, this is optional
+[weights.some_weight]
+enabled = true
+weight = "0.3"
+condition = "true"
+
+[weights.another_weight]
+enabled = true
+weight = "my_factor"
+condition = "locConfidenceLevel > 1e-9"
+code = """
+Double_t my_factor = 0.4;
+if(locConfidenceLevel < 1e-4) {
+  my_factor = 0.2
 }
+"""
 ```
-This code describes two weights, one of which gives all events a weight of `0.3` and the other of which gives a weight which depends on several conditions: the weight is only applied if the confidence level is greater than `1e-9` and if this is true it checks whether or not it is less than `1e-4` and assigns different weights accordingly. Anything written in the `code` field here is inserted immediately before the weight is applied and can access code from any of the prior fields like `variables` and `vectors`.
+This code describes two weights, one of which gives all events a weight of `0.3` and the other of which gives a weight which depends on several conditions: the weight is only applied if the confidence level is greater than `1e-9` and if this is true it checks whether or not it is less than `1e-4` and assigns different weights accordingly. Anything written in the `code` field here is inserted immediately before the weight is applied and can access code from any of the prior fields like `variables` and `vectors`. Note that `enabled` is a boolean field while `condition` is a string. `condition` gets written directly as code, so `condition = "true"` just creates an `if(true)` statement in the C code. Additionally, the `weight` parameter is a string rather than an float to allow for more complicated expressions to be entered directly into the code.
 
 #### uniqueness
 This field keeps track of the uniqueness of the combos being plotted in various histograms. You may define multiple fields here, but you must define at least some uniqueness tracking for each histogram you want to create:
-```json
-{
-    "uniqueness": {
-        "all": {"particles": "all", "histograms": "all"},
-        "beamtracking": {"particles": ["Beam"], "histograms": "all"}
-    },
-}
+```toml
+[uniqueness]
+[uniqueness.track_all]
+particles = "all"
+histograms = "all"
+
+[uniqueness.track_none]
+particles = "none"
+histograms = "all"
+
+[uniqueness.track_beam]
+particles = ["Beam"]
+histograms = ["MissingMassSquared"]
+
+[uniqueness.track_a_few]
+particles = ["PiPlus1", "PiMinus1"]
+histograms = "all"
 ```
-the `all` parameter has special use here. While in the second case, the suffix `_beamtracking` will be added to all histograms using this uniqueness tracking option, no such suffix will be applied to the `all` tracker. Inside each uniqueness tracker there are two fields, `particles` and `histograms`. `particles` can either be set to `all` to uniquely track all of the particles present in the final state (one histogram entry per each unique combination of all final-state particles) or a list of particles. The particle names can be found near the top of the DSelector and typically have names like `loc<name>ID` or `loc<name>TrackID` (like `locBeamID` or `locPiPlus2TrackID`). The `histograms` field can also be set to `all` to include all histograms in this configuration file or as a list of histogram names (specified in the next and final field).
+Note the use of "all" and "none" in the `particles` field. The keyword "none" is special and it allows you to add histograms which skip uniqueness tracking. Similarly, "all" is shorthand for including all of the trackable particles, including the beam. Finally, in the `histogram` field, "all" is a shorthand which applies this tracking to every histogram. Each tracking field creates copies of histograms with a "_<tracker name>" suffix added to them, although in the case of "all" particles, no suffix is added, and in the case of "none", the suffix "_allcombos" is added. Because of this, you cannot define multiple uniqueness trackers with "all" or "none" particle fields.
 
 #### histograms
 The `histograms` field contains the information needed to create each histogram. There are several use cases, but the simplest histogram can be generated as:
-```json
-{
-    "histograms": {
-        "Log10KinFitCL": {
-            "x": "loclog10ConfidenceLevel",
-            "xrange": [-20, 0],
-            "xbins": 200
-        }
-    }
-}
+```toml
+[histograms]
+[histograms.MissingMassSquared]
+x = "locMissingP4.M2()"
+xrange = [-0.1, 0.1]
+xbins = 201
+xlabel = "(Missing Mass)^{2}"
+
+[histograms.Log10KinFitCL]
+x = "loclog10ConfidenceLevel"
+xrange = [-20, 0]
+xbins = 200
+xlabel = "Log(CL)"
 ```
 The `x` parameter describes the variable to plot (this can also include any inline C code, like `locMissingP4.M2()`, for example). `xrange` describes the minimum and maximum bin edges, and `xbins` tells the program how many bins to use in the histogram. Additionally, the user may supply fields like `xlabel`, `ylabel`, and `title` to label the histogram correspondingly (these take a string which may include the proper ROOT-to-LaTeX formatters).
 
 To make a 2D histogram, we just include `y`, `yrange`, and `ybins` fields:
-```json
-{
-    "histograms": {
-        "vanHove": {
-            "x": "locVanHoveX",
-            "xrange": [-3.0, 3.0],
-            "xbins": 100,
-            "xlabel": "X",
-            "y": "locVanHoveY",
-            "yrange": [-3.0, 3.0],
-            "ybins": 100,
-            "ylabel": "Y"
-        }
-    }
-}
+```toml
+[histograms.vanHove]
+x = "locVanHoveX"
+xrange = [-3.0, 3.0]
+xbins = 100
+xlabel = "X"
+y = "locVanHoveY"
+yrange = [-3.0, 3.0]
+ybins = 100
+ylabel = "Y"
 ```
 There is an alternative way to create 2D histograms if two 1D histograms are already defined. We can use the `xhist` and `yhist` fields to copy information from existing histograms (this can also be used with just `xhist` to create copies of 1D histograms). Changing any of the fields will overwrite the existing data copied over from the old histogram into the new one. For example:
-```json
-{
-    "histograms": {
-        "KShort1_InvMass": {
-            "x": "locDecayingKShort1P4_Measured.M()",
-            "xrange": [0.3, 0.7],
-            "xbins": 100,
-            "xlabel": "K_{S,1}^{0} Invariant Mass (GeV/c^{2})"
-        },
-        "KShort2_InvMass": {
-            "xhist": "KShort1_InvMass",
-            "x": "locDecayingKShort2P4_Measured.M()",
-            "xlabel": "K_{S,2}^{0} Invariant Mass (GeV/c^{2})"
-        },
-        "Ks1vsKs2": {
-            "xhist": "KShort1_InvMass",
-            "yhist": "KShort2_InvMass"
-        },
-    }
-}
+```toml
+[histograms.KShort1_InvMass]
+x = "locDecayingKShort1P4_Measured.M()"
+xrange = [0.3, 0.7]
+xbins = 100
+xlabel = "K_{S,1}^{0} Invariant Mass (GeV/c^{2})"
+
+[histograms.KShort2_InvMass]
+x = "locDecayingKShort2P4_Measured.M()"
+xhist = "KShort1_InvMass"
+xlabel = "K_{S,2}^{0} Invariant Mass (GeV/c^{2})"
+
+[histograms.Ks1vsKs2]
+xhist = "KShort1_InvMass"
+xbins = 400
+yhist = "KShort2_InvMass"
+title = "Correlation Plot"
 ```
-creates three histograms. The first has all fields explicitly defined. The `KShort2_InvMass` histogram inherets `xrange` and `xbins` from `KShort1_InvMass` but changes the `x` variable as well as the `xlabel`. Finally, `Ks1vsKs2` is a 2D histogram showing the correlation of the kaon masses.
+creates three histograms. The first has all fields explicitly defined. The `KShort2_InvMass` histogram inherets `xrange` and `xbins` from `KShort1_InvMass` but changes the `x` variable as well as the `xlabel`. Finally, `Ks1vsKs2` is a 2D histogram showing the correlation of the kaon masses, but it overwrites the number of `xbins` and adds a `title`.
 
 One final field exists to allow for some very specific use cases: `destination` can be used to double-fill a histogram:
-```json
-{
-    "histograms": {
-        "HXPhi": {
-            "x": "locKShort1HX.Phi()",
-            "xrange": ["-TMath::Pi()", "TMath::Pi()"],
-            "xbins": 50,
-            "xlabel": "#phi_{HX}"
-        },
-        "HXPhi2": {
-            "destination": "HXPhi",
-            "x": "locKShort2HX.Phi()"
-        }
-    }
-}
+```toml
+[histograms.HXCosTheta]
+x = "locKShort1HX.CosTheta()"
+xrange = [ -1, 1, ]
+xbins = 50
+xlabel = "cos(#theta_{HX})"
+
+[histograms.HXCosTheta2]
+destination = "HXCosTheta"
+x = "locKShort2HX.CosTheta()"
 ```
-Here, suppose we had two identical kaons and we wanted to plot an angle in the kaon + kaon center-of-momentum frame. The kaons are back-to-back in this frame, so we could plot both of them in the same histogram by specifying that the `destination` of the second histogram is the first histogram. Using the `destination` field will cause the program to ignore everything except `x` and `y` fields for that particular histogram.
+What is the use of this? Well, suppose we had two identical kaons and we wanted to plot an angle in the kaon + kaon center-of-momentum frame. The kaons are back-to-back in this frame, so we could plot both of them in the same histogram by specifying that the `destination` of the second histogram is the first histogram. Using the `destination` field will cause the program to ignore everything except `x` and `y` fields for that particular histogram, essentially sending the `x` and/or `y` variables to the `destination`.
+
+#### output
+The `output` field allows the user to generate flat trees alongside the default output histograms and analysis trees. It is not a required field, so if it is omitted, no flat trees will be generated. However, if one wishes to flatten a tree, it is simple to do. The code below fills flat trees with all of the information required for an AmpTools analysis, for example:
+```toml
+[output.Total_Weight]
+name = "Weight"
+type = "Float_t"
+value = "locWeight"
+
+[output.E_Beam]
+name = "E_Beam"
+type = "Float_t"
+value = "locBeamP4.E()"
+
+[output.Px_Beam]
+name = "Px_Beam"
+type = "Float_t"
+value = "locBeamP4.Px()"
+
+[output.Py_Beam]
+name = "Py_Beam"
+type = "Float_t"
+value = "locBeamP4.Py()"
+
+[output.Pz_Beam]
+name = "Pz_Beam"
+type = "Float_t"
+value = "locBeamP4.Pz()"
+
+[output.E_FinalState]
+name = "E"
+type = "Float_t"
+
+[output.E_FinalState.array]
+name = "FinalState"
+values = [
+    "locProtonP4.E()",
+    "locDecayingKShort1P4.E()",
+    "locDecayingKShort2P4.E()",
+]
+
+[output.Px_FinalState]
+name = "Px"
+type = "Float_t"
+
+[output.Px_FinalState.array]
+name = "FinalState"
+values = [
+    "locProtonP4.Px()",
+    "locDecayingKShort1P4.Px()",
+    "locDecayingKShort2P4.Px()",
+]
+
+[output.Py_FinalState]
+name = "Py"
+type = "Float_t"
+
+[output.Py_FinalState.array]
+name = "FinalState"
+values = [
+    "locProtonP4.Py()",
+    "locDecayingKShort1P4.Py()",
+    "locDecayingKShort2P4.Py()",
+]
+
+[output.Pz_FinalState]
+name = "Pz"
+type = "Float_t"
+
+[output.Pz_FinalState.array]
+name = "FinalState"
+values = [
+    "locProtonP4.Pz()",
+    "locDecayingKShort1P4.Pz()",
+    "locDecayingKShort2P4.Pz()",
+]
+```
+Each `output` subfield defines a new branch in the flat tree with the given `type`. Branches will be filled from the code in the `value` field. Note the added syntax which allows for the creation of arrays. The `array` field contains an array `name` as well as a list of `values` rather than a single `value`. The TOML syntax is flexible, so we could also write one of these arrays as
+```toml
+[output.Pz_FinalState]
+name = "Pz"
+type = "Float_t"
+array.name = "FinalState"
+array.values = [
+    "locProtonP4.Pz()",
+    "locDecayingKShort1P4.Pz()",
+    "locDecayingKShort2P4.Pz()",
+]
+```
+In either case, this will create a branch named "Pz_FinalState" which contains an array of the three particles' z-momenta. The DSelector's `dFlatTreeInterface` handles all of the numbering branches (`N_FinalState` in this example).
 
 ## Installing
 The `MakePSelector` program can be installed by cloning this repository and running
@@ -226,5 +302,18 @@ The `MakePSelector` program can be installed by cloning this repository and runn
 pip3 install .
 ```
 in the root project directory. Due to the specificity of this program, I do not see the need to publish it to PyPI. When installed in this way it will make the `MakePSelector` script available for execution from any directory. Note that `MakePSelector` is written for `python3`. I will not write a version for `python2`, as it has been [deprecated/sunset since 2020 and is no longer supported](https://www.python.org/doc/sunset-python-2/). If you are still using `python2` for analysis, 99% of your code can be updated by simply converting your `print` statements.
+
+## Dependencies
+This program has two dependencies, [particle](https://github.com/scikit-hep/particle) from the Scikit-HEP group and [tomli](https://github.com/hukkin/tomli) which parses TOML files. However, if you are using Python 3.11 or later, the `tomllib` package is now native and will be used instead.
+
+There is also a hidden `PyROOT` dependency. I wish this were not the case, but the particle decay map is located in the `UserInfo` part of the TTree, which is unfortunately not easily accessible by libraries like `uproot`. This means your version of ROOT must be built with `python3` compatibility, which is not how the default ROOT binaries ship from CERN. If you build ROOT from source (about four lines of shell code), it should automatically detect a `python3` installation.
+
+## Changelog
+
+v0.0.2
+- Switched configuration file support from JSON to TOML
+
+v0.0.1
+- Initial Release
 
 Planned features will be added as issues arise. I can imagine there will be lots of very specific features or shorthands that might be appreciated. For example, we almost always want to calculate things like the Mandelstam t or the missing mass squared, so in the future I might implement a shorthand to do this automatically.
