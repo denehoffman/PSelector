@@ -9,6 +9,6 @@ setup(
     packages=find_packages("src"),
     package_dir={"": "src"},
     scripts=[str(SRC / "MakePSelector")],
-    install_requires=["particle"],
+    install_requires=["particle", "tomli"],
     zip_safe=False
 )

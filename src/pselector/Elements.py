@@ -230,7 +230,7 @@ class Weight:
         outstring = ""
         if self.weight_config["enabled"]:
             if self.weight_config.get("code"):
-                for line in self.weight_config["code"]:
+                for line in self.weight_config["code"].splitlines():
                     outstring += "    " * indent + line + "\n"
             outstring += "    " * indent + f"if({self.weight_config['condition']}) {{\n"
             outstring += "    " * (indent + 1) + f"if(locWeight < 0 && {self.weight_config['weight']} < 0) {{\n"

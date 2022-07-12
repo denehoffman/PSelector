@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight, FlatBranch
 import ROOT as root
-import json
 import argparse
 from pprint import pprint
 from pathlib import Path
 import re
 from particle import Particle
-
+try:
+    import tomllib # native support in Python 3.11
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 ############# WRITE HEADER ###############
 def get_header(treename, particle_map, config, basename="default"):
@@ -292,7 +294,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     for varname, varcode in config["variables"].items():
         source_text += "\n"
         source_text += f"        // {varname}\n"
-        for line in varcode:
+        for line in varcode.splitlines():
             source_text += "        " + line + "\n"
 
     # Execute Analysis Actions
@@ -427,7 +429,7 @@ def main():
     if config_path:
         print(f"Using {str(config_path)} to supplement DSelector generation")
         with open(config_path, 'r') as stream:
-            config = json.load(stream)
+            config = tomllib.load(stream)
 
     input_path = Path(config["source"]).resolve()
     assert input_path.exists(), f"Could not access {str(input_path)}!"
