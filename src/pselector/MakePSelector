@@ -420,16 +420,11 @@ def main():
     parser.add_argument("-f", "--force", action="store_true", help="force overwriting existing output files")
     parser.add_argument("--cut-accidentals", action="store_true", help="cut accidentals rather than subtract them")
     args = parser.parse_args()
-    if args.config:
-        config_path = Path(args.config).resolve()
-        assert config_path.exists(), f"Could not access {str(config_path)}!"
-    else:
-        config_path = None
-    config = {"uniqueness": {}, "histograms": {}}
-    if config_path:
-        print(f"Using {str(config_path)} to supplement DSelector generation")
-        with open(config_path, 'r') as stream:
-            config = tomllib.load(stream)
+    config_path = Path(args.config).resolve()
+    assert config_path.exists(), f"Could not access {str(config_path)}!"
+    print(f"Using {str(config_path)} to supplement DSelector generation")
+    with open(config_path, 'r') as stream:
+        config = tomllib.load(stream)
 
     input_path = Path(config["source"]).resolve()
     assert input_path.exists(), f"Could not access {str(input_path)}!"
