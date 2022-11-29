@@ -12,7 +12,9 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 ############# WRITE HEADER ###############
-def get_header(treename, particle_map, config, basename="default"):
+def get_header(config):
+    particle_map = config["particle_map"]
+    basename = config["basename"]
     header_text = f"""#ifndef DSelector_{basename}_h
 #define DSelector_{basename}_h
 
@@ -104,14 +106,17 @@ void DSelector_{basename}::Get_ComboWrappers(void) {{
     header_text += f"}}\n\n#endif // DSelector_{basename}_h"
     return header_text
 
-def get_source(treename, particle_map, config, basename="default", cut_accidentals=False):
+def get_source(config, cut_accidentals=False):
+    treename = config["treename"]
+    particle_map = config["particle_map"]
+    basename = config["basename"]
     source_text = f"""#include "DSelector_{basename}.h"
 
 void DSelector_{basename}::Init(TTree *locTree) {{
 
     dOutputFileName = "hist_{basename}.root";
     dOutputTreeFileName = "tree_{basename}.root";"""
-    
+
     if config.get("output"):
         source_text += f"""
     dFlatTreeFileName = "flat_{basename}.root";
@@ -146,7 +151,7 @@ void DSelector_{basename}::Init(TTree *locTree) {{
     source_text += "    // DEFINE HISTOGRAMS HERE\n"
     for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
         source_text += uniqueness.init_hists()
-    
+
     source_text += "\n"
 
     ###################################### custom main tree stuff
@@ -212,7 +217,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
             if not particle.get("particle"):
                 continue
             elif particle.get("name") == "ComboBeam":
-                source_text += "        Int_t locBeamID = dComboBeamWrapper->Get_BeamID();\n" 
+                source_text += "        Int_t locBeamID = dComboBeamWrapper->Get_BeamID();\n"
             elif particle.get("name").startswith("Target"):
                 continue
             elif particle.get("name").startswith("Decaying"):
@@ -220,9 +225,9 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
             elif particle.get("name").startswith("Missing"):
                 continue
             elif particle.get("particle").charge != 0:
-                source_text += f"        Int_t loc{particle.get('name')}TrackID = d{particle.get('name')}Wrapper->Get_TrackID();\n" 
+                source_text += f"        Int_t loc{particle.get('name')}TrackID = d{particle.get('name')}Wrapper->Get_TrackID();\n"
             else:
-                source_text += f"        Int_t loc{particle.get('name')}NeutralID = d{particle.get('name')}Wrapper->Get_NeutralID();\n" 
+                source_text += f"        Int_t loc{particle.get('name')}NeutralID = d{particle.get('name')}Wrapper->Get_NeutralID();\n"
         source_text += "\n"
 
     ###################################### Get four-vectors
@@ -233,10 +238,10 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
             if not particle.get("particle"):
                 continue
             elif particle.get("name") == "ComboBeam":
-                source_text += "        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n" 
-                source_text += "        TLorentzVector locBeamP4_Measured = dComboBeamWrapper->Get_P4_Measured();\n" 
-                source_text += "        TLorentzVector locBeamX4 = dComboBeamWrapper->Get_X4();\n" 
-                source_text += "        TLorentzVector locBeamX4_Measured = dComboBeamWrapper->Get_X4_Measured();\n" 
+                source_text += "        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n"
+                source_text += "        TLorentzVector locBeamP4_Measured = dComboBeamWrapper->Get_P4_Measured();\n"
+                source_text += "        TLorentzVector locBeamX4 = dComboBeamWrapper->Get_X4();\n"
+                source_text += "        TLorentzVector locBeamX4_Measured = dComboBeamWrapper->Get_X4_Measured();\n"
                 vector_names += ["locBeamP4", "locBeamP4_Measured"]
             elif particle.get("name").startswith("Target"):
                 continue
@@ -264,7 +269,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     # Boosts
     for boost in [Boost(name, config, vector_names) for name in config["boosts"].keys()]:
         source_text += boost.boost_string()
-    
+
 
     ###################################### Old Accidental Weighting
     n_out_of_time = -1
@@ -400,7 +405,7 @@ def get_particle_map(path):
     output_sorted = []
     for step_list in output:
         output_sorted.append(sorted(step_list, key=lambda d: d.get("index")))
-    return treename, branches, output_sorted
+    return treename, branches, output_sorted, ("NumThrown" in branches)
 
 def main():
     parser_desc = """
@@ -433,7 +438,7 @@ def main():
 
     input_path = Path(config["source"]).resolve()
     assert input_path.exists(), f"Could not access {str(input_path)}!"
-    treename, branches, particle_map = get_particle_map(str(input_path))
+    treename, branches, particle_map, is_thrown = get_particle_map(str(input_path))
     if args.name:
         basename = args.name
     else:
@@ -445,9 +450,13 @@ def main():
         assert not output_header_path.exists(), f"{str(output_header_path)} already exists in this directory, run with '--force' to overwrite this file!"
 
     print(f"Generating {str(output_source_path)} and {str(output_header_path)}...")
+    config["basename"] = basename
+    config["particle_map"] = particle_map
+    config["treename"] = treename
+    config["is_thrown"] = is_thrown
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
-        source.write(get_source(treename, particle_map, config, basename, cut_accidentals=args.cut_accidentals))
-        header.write(get_header(treename, particle_map, config, basename))
+        source.write(get_source(config, cut_accidentals=args.cut_accidentals))
+        header.write(get_header(config))
 
 if __name__ == "__main__":
     main()
