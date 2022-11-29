@@ -12,7 +12,7 @@ class Uniqueness:
         if self.cuts is not None:
             if isinstance(self.cuts, str):
                 self.cuts = [self.cuts]
-        assert isinstance(self.cuts, list), f"Uniqueness cuts must be a list of cut names or a single string for one cut (error in {self.name})"
+            assert isinstance(self.cuts, list), f"Uniqueness cuts must be a list of cut names or a single string for one cut (error in {self.name})"
         if self.particles == "all":
             if self.name == "all":
                 self.tag = ""
@@ -58,13 +58,24 @@ class Uniqueness:
             hist = Histogram(hist_name, self.config)
             outstring += hist.init_string(tag=self.tag, indent=indent)
         return outstring
+    
+    def fill_hists(self, indent=3):
+        outstring = ""
+        if self.cuts is not None:
+            outstring = "    " * indent + "if(!("
+            outstring += ") && !(".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
+            outstring += ")) {\n"
+        for hist_name in self.histograms:
+            hist = Histogram(hist_name, self.config)
+            outstring += hist.fill_string(tag=self.tag, indent=(indent if self.cuts is None else indent+1))
+        if self.cuts is not None:
+            outstring += "    " * indent + "}\n"
+        return outstring
 
     def fill_string(self, indent=2):
         outstring = ""
         if len(self.particles) == 0:
-            for hist_name in self.histograms:
-                hist = Histogram(hist_name, self.config)
-                outstring += hist.fill_string(tag=self.tag, indent=indent)
+            outstring += self.fill_hists(indent=2)
         elif len(self.particles) == 1:
             if self.particles[0] == "Beam":
                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}ID) == locUsedSoFar_{self.name}.end()) {{\n"
@@ -76,9 +87,7 @@ class Uniqueness:
                                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}TrackID)) == locUsedSoFar_{self.name}.end()) {{\n"
                             else:
                                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}NeutralID)) == locUsedSoFar_{self.name}.end()) {{\n"
-            for hist_name in self.histograms:
-                hist = Histogram(hist_name, self.config)
-                outstring += hist.fill_string(tag=self.tag, indent=indent+1)
+            outstring += self.fill_hists()
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(loc{self.particles[0]}ID);\n"
             outstring += "    " * indent + "}\n"
         else:
@@ -95,16 +104,7 @@ class Uniqueness:
                                 else:
                                     outstring += "    " * indent + f"locUsedThisCombo_{self.name}[PDGtoPType({particle.get('pid')})].insert(loc{tracked_particle}NeutralID);\n"
             outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(locUsedThisCombo_{self.name}) == locUsedSoFar_{self.name}.end()) {{\n"
-            if self.cuts is not None:
-                cutstring = "    " * (indent + 1) + "if("
-                for cut_name in self.cuts:
-                    cutstring += self.config['cuts'][name]["condition"]
-                cutstring += ") {\n"
-            for hist_name in self.histograms:
-                hist = Histogram(hist_name, self.config)
-                outstring += hist.fill_string(tag=self.tag, indent=(indent+1 if self.cuts is None else indent+2))
-            if self.cuts is not None:
-                outstring += "    " * (indent + 1) + "}\n"
+            outstring += self.fill_hists()
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(locUsedThisCombo_{self.name});\n"
             outstring += "    " * indent + "}\n"
         return outstring
