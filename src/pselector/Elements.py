@@ -39,7 +39,7 @@ class Uniqueness:
             self.tag = f"_{name}"
 
     def folder_string(self, indent=1):
-        return "    " * indent + f"TDirectory *dir_{self.name}->mkdir(\"{self.folder}\")\n"
+        return "    " * indent + f"TDirectory *dir{self.name} = dir_main->mkdir(\"{self.folder_name}\");\n"
 
     def init_string(self, indent=1):
         if len(self.particles) == 0:
@@ -49,21 +49,21 @@ class Uniqueness:
         else:
             return "    " * indent + f"set<map<Particle_t, set<Int_t>>> locUsedSoFar_{self.name};\n"
 
-    def header_hists(self, indent=2):
+    def header_hists(self, indent=2, n_folders=1):
         outstring = ""
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
             outstring += hist.header_string(tag=self.tag, indent=indent)
         return outstring
 
-    def init_hists(self, indent=1, folder=False):
+    def init_hists(self, indent=1, n_dir=-1):
         outstring = ""
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
-            outstring += hist.init_string(tag=self.tag, indent=indent, folder=folder)
+            outstring += hist.init_string(tag=self.tag, indent=indent, n_dir=n_dir)
         return outstring
 
-    def fill_hists(self, indent=3):
+    def fill_hists(self, indent=3, n_dir=-1):
         outstring = ""
         if self.cuts is not None:
             outstring = "    " * indent + "if(!("
@@ -71,15 +71,15 @@ class Uniqueness:
             outstring += ")) {\n"
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
-            outstring += hist.fill_string(tag=self.tag, indent=(indent if self.cuts is None else indent+1))
+            outstring += hist.fill_string(tag=self.tag, indent=(indent if self.cuts is None else indent+1), n_dir=n_dir)
         if self.cuts is not None:
             outstring += "    " * indent + "}\n"
         return outstring
 
-    def fill_string(self, indent=2):
+    def fill_string(self, indent=2, n_dir=-1):
         outstring = ""
         if len(self.particles) == 0:
-            outstring += self.fill_hists(indent=2)
+            outstring += self.fill_hists(indent=2, n_dir=n_dir)
         elif len(self.particles) == 1:
             if self.particles[0] == "Beam":
                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}ID) == locUsedSoFar_{self.name}.end()) {{\n"
@@ -91,7 +91,7 @@ class Uniqueness:
                                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}TrackID)) == locUsedSoFar_{self.name}.end()) {{\n"
                             else:
                                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}NeutralID)) == locUsedSoFar_{self.name}.end()) {{\n"
-            outstring += self.fill_hists()
+            outstring += self.fill_hists(n_dir=n_dir)
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(loc{self.particles[0]}ID);\n"
             outstring += "    " * indent + "}\n"
         else:
@@ -108,7 +108,7 @@ class Uniqueness:
                                 else:
                                     outstring += "    " * indent + f"locUsedThisCombo_{self.name}[PDGtoPType({particle.get('pid')})].insert(loc{tracked_particle}NeutralID);\n"
             outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(locUsedThisCombo_{self.name}) == locUsedSoFar_{self.name}.end()) {{\n"
-            outstring += self.fill_hists()
+            outstring += self.fill_hists(n_dir=n_dir)
             outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(locUsedThisCombo_{self.name});\n"
             outstring += "    " * indent + "}\n"
         return outstring
@@ -169,10 +169,8 @@ class Histogram:
                 ylabel = ""
         return ylabel
 
-    def header_string(self, tag="", indent=1, n_folders=1):
+    def header_string(self, tag="", indent=1):
         if not self.has_destination:
-            if n_folders > 1:
-                tag += f"[{n_folders}]"
             if self.is2D:
                 return "    " * indent + f"TH2D* dHist_{self.tag}{tag};\n"
             else:
@@ -180,20 +178,25 @@ class Histogram:
         else:
             return ""
 
-    def init_string(self, tag="", indent=1, folder=False):
+    def init_string(self, tag="", indent=1, n_dir=-1):
         if not self.has_destination:
-            if folder:
-                tag += "[dir]"
-            if self.is2D:
-                return "    " * indent + f"dHist_{self.tag}{tag} = new TH2D(\"{self.tag}{tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]}, {self.get_y_param('ybins')}, {self.get_y_param('yrange')[0]}, {self.get_y_param('yrange')[1]});\n"
+            if n_dir >= 0:
+                tag = f"[{n_dir}]"
+                if self.is2D:
+                    return "    " * indent + f"dHist_{self.tag}{tag} = new TH2D(\"{self.tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]}, {self.get_y_param('ybins')}, {self.get_y_param('yrange')[0]}, {self.get_y_param('yrange')[1]});\n"
+                else:
+                    return "    " * indent + f"dHist_{self.tag}{tag} = new TH1D(\"{self.tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]});\n"
             else:
-                return "    " * indent + f"dHist_{self.tag}{tag} = new TH1D(\"{self.tag}{tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]});\n"
+                if self.is2D:
+                    return "    " * indent + f"dHist_{self.tag}{tag} = new TH2D(\"{self.tag}{tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]}, {self.get_y_param('ybins')}, {self.get_y_param('yrange')[0]}, {self.get_y_param('yrange')[1]});\n"
+                else:
+                    return "    " * indent + f"dHist_{self.tag}{tag} = new TH1D(\"{self.tag}{tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]});\n"
         else:
             return ""
 
     def fill_string(self, tag="", indent=1, n_dir=-1):
         if n_dir >= 0:
-            tag += f"[{n_dir}]"
+            tag = f"[{n_dir}]"
         if self.is2D:
             return "    " * indent + f"dHist_{self.tag}{tag}->Fill({self.get_x_param('x')}, {self.get_y_param('y')}, {self.weight});\n"
         else:

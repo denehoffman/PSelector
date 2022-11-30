@@ -74,11 +74,13 @@ class DSelector_{basename} : public DSelector {{
         header_text += "\n"
     header_text += "        // DEFINE YOUR HISTOGRAMS HERE\n"
     # HISTOGRAM INITIALIZATIONS
-    n_folders = len([config["uniqueness"].keys())
-    for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
-        if config["folders"]:
-            header_text += uniqueness.header_hists(n_folders=n_folders)
-        else:
+    n_folders = len(config["uniqueness"].keys())
+    if config["folders"]:
+        for hist_name in config["histograms"]: # make all possible histograms, only init the ones we want to fill later
+            hist = Histogram(hist_name, config)
+            header_text += hist.header_string(tag=f"[{n_folders}]", indent=2)
+    else:
+        for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
             header_text += uniqueness.header_hists()
     # END HISTOGRAM INITIALIZATIONS
     header_text += f"""\n    ClassDef(DSelector_{basename}, 0);
@@ -153,18 +155,17 @@ void DSelector_{basename}::Init(TTree *locTree) {{
 """
     source_text += "    // DEFINE HISTOGRAMS HERE\n"
     ###################################### uniqueness folder creation
-    n_folders = len([config["uniqueness"].keys())
+    n_folders = len(config["uniqueness"].keys())
     ###################################### add histograms
     if n_folders > 1 and config["folders"]:
         source_text += "    TDirectory *dir_main = gDirectory;\n"
         for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
             source_text += uniqueness.folder_string()
         folder_strings = [f"\"{Uniqueness(name, config, particle_map).folder_name}\"" for name in config["uniqueness"].keys()]
-        source_text += f"    TString locDirectoryLabels[{n_folders}] = {{{', '.join(folder_strings)}}}\n"
-        source_text += f"    for(int dir = 0; dir < {n_folders}; dir++) {{\n"
-        source_text += "        dir_main->cd(locDirectoryLabels[dir]);\n"
-        for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
-            source_text += uniqueness.init_hists(folder=True)
+        source_text += f"    TString locDirectoryLabels[{n_folders}] = {{{', '.join(folder_strings)}}};\n"
+        for n_dir, uniqueness in enumerate([Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]):
+            source_text += f"    dir_main->cd(locDirectoryLabels[{n_dir}]);\n"
+            source_text += uniqueness.init_hists(n_dir=n_dir)
     else:
         for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
             source_text += uniqueness.init_hists()
