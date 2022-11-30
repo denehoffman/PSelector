@@ -63,7 +63,7 @@ class Uniqueness:
         outstring = ""
         if self.cuts is not None:
             outstring = "    " * indent + "if(!("
-            outstring += ") && !(".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
+            outstring += " || ".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
             outstring += ")) {\n"
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
