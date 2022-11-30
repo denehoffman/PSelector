@@ -8,6 +8,7 @@ class Uniqueness:
             self.histograms = [hist_name for hist_name in self.config["histograms"].keys()]
         self.particles = self.uniqueness_config["particles"]
         self.name = name
+        self.folder_name = self.uniqueness_config.get("folder", name)
         self.cuts = self.uniqueness_config.get("cuts", None)
         if self.cuts is not None:
             if isinstance(self.cuts, str):
@@ -37,6 +38,9 @@ class Uniqueness:
         else:
             self.tag = f"_{name}"
 
+    def folder_string(self, indent=1):
+        return "    " * indent + f"TDirectory *dir_{self.name}->mkdir(\"{self.folder}\")\n"
+
     def init_string(self, indent=1):
         if len(self.particles) == 0:
             return "    " * indent + "// Some histograms will be generated without uniqueness tracking\n"
@@ -52,13 +56,13 @@ class Uniqueness:
             outstring += hist.header_string(tag=self.tag, indent=indent)
         return outstring
 
-    def init_hists(self, indent=1):
+    def init_hists(self, indent=1, folder=False):
         outstring = ""
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
-            outstring += hist.init_string(tag=self.tag, indent=indent)
+            outstring += hist.init_string(tag=self.tag, indent=indent, folder=folder)
         return outstring
-    
+
     def fill_hists(self, indent=3):
         outstring = ""
         if self.cuts is not None:
@@ -165,8 +169,10 @@ class Histogram:
                 ylabel = ""
         return ylabel
 
-    def header_string(self, tag="", indent=1):
+    def header_string(self, tag="", indent=1, n_folders=1):
         if not self.has_destination:
+            if n_folders > 1:
+                tag += f"[{n_folders}]"
             if self.is2D:
                 return "    " * indent + f"TH2D* dHist_{self.tag}{tag};\n"
             else:
@@ -174,8 +180,10 @@ class Histogram:
         else:
             return ""
 
-    def init_string(self, tag="", indent=1):
+    def init_string(self, tag="", indent=1, folder=False):
         if not self.has_destination:
+            if folder:
+                tag += "[dir]"
             if self.is2D:
                 return "    " * indent + f"dHist_{self.tag}{tag} = new TH2D(\"{self.tag}{tag}\", \"{self.title};{self.get_xlabel()};{self.get_ylabel()}\", {self.get_x_param('xbins')}, {self.get_x_param('xrange')[0]}, {self.get_x_param('xrange')[1]}, {self.get_y_param('ybins')}, {self.get_y_param('yrange')[0]}, {self.get_y_param('yrange')[1]});\n"
             else:
@@ -183,7 +191,9 @@ class Histogram:
         else:
             return ""
 
-    def fill_string(self, tag="", indent=1):
+    def fill_string(self, tag="", indent=1, n_dir=-1):
+        if n_dir >= 0:
+            tag += f"[{n_dir}]"
         if self.is2D:
             return "    " * indent + f"dHist_{self.tag}{tag}->Fill({self.get_x_param('x')}, {self.get_y_param('y')}, {self.weight});\n"
         else:
