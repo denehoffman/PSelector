@@ -224,7 +224,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
         dComboWrapper->Set_ComboIndex(loc_i);
         if(dComboWrapper->Get_IsComboCut()) {{
-            continue;
+            continue; // Ignore all combos cut in any previous analysis
         }}
 
         // GET PARTICLE INDICES FOR UNIQUENESS TRACKING
@@ -303,7 +303,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         // Cut Accidentals
         if(fabs(locDeltaT_RF) > 0.5 * 4.008) {
             dComboWrapper->Set_IsComboCut(true);
-            continue;
+            continue; // By default, if --cut-accidentals is used, never plot these in any histograms
         }
         Double_t locWeight = 1.0;
 """
@@ -350,6 +350,10 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
     if config.get("output"):
         source_text += """
+        // Don't output combos that were cut
+        if(dComboWrapper->Get_IsComboCut()) {
+            continue;
+        }
         // Fill labeling branches
         dFlatTreeInterface->Fill_Fundamental<UInt_t>("RunNumber", locRunNumber);
         dFlatTreeInterface->Fill_Fundamental<ULong64_t>("EventNumber", Get_EventNumber());

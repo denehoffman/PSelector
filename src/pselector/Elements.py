@@ -69,11 +69,12 @@ class Uniqueness:
             outstring = "    " * indent + "if(!("
             outstring += ") && !(".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
             outstring += ")) {\n"
+        else:
+            outstring = "    " * indent + "if(!dComboWrapper->Get_IsComboCut()) {\n" # if no cuts are listed, use all enabled cuts
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
-            outstring += hist.fill_string(tag=self.tag, indent=(indent if self.cuts is None else indent+1), n_dir=n_dir)
-        if self.cuts is not None:
-            outstring += "    " * indent + "}\n"
+            outstring += hist.fill_string(tag=self.tag, indent=indent+1, n_dir=n_dir)
+        outstring += "    " * indent + "}\n"
         return outstring
 
     def fill_string(self, indent=2, n_dir=-1):
@@ -244,7 +245,7 @@ class Cut:
         if self.cut_config["enabled"]:
             outstring += "    " * indent + f"if({self.cut_config['condition']}) {{\n"
             outstring += "    " * (indent + 1) + "dComboWrapper->Set_IsComboCut(true);\n"
-            outstring += "    " * (indent + 1) + "continue;\n"
+            # outstring += "    " * (indent + 1) + "continue;\n"
             outstring += "    " * indent + "}\n"
         return outstring
 
