@@ -461,6 +461,8 @@ def main():
     treename, branches, particle_map, is_thrown = get_particle_map(str(input_path))
     if args.name:
         basename = args.name
+    elif config.get("name"):
+        basename = config["name"]
     else:
         basename = treename.replace("_Tree", "")
     output_source_path = Path(".") / f"DSelector_{basename}.C"
@@ -472,6 +474,13 @@ def main():
     config["treename"] = treename
     config["is_thrown"] = is_thrown
     config["folders"] = not args.no_folders
+    config["vectors"] = config.get("vectors", {})
+    config["boosts"] = config.get("boosts", {})
+    config["variables"] = config.get("variables", {})
+    config["cuts"] = config.get("cuts", {})
+    config["weights"] = config.get("weights", {})
+    config["uniqueness"] = config.get("uniqueness", {})
+    config["histograms"] = config.get("histograms", {})
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
         source.write(get_source(config, cut_accidentals=args.cut_accidentals))
         header.write(get_header(config))
