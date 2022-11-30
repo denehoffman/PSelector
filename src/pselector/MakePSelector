@@ -224,7 +224,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
         dComboWrapper->Set_ComboIndex(loc_i);
         if(dComboWrapper->Get_IsComboCut()) {{
-            continue;
+            continue; // Ignore all combos cut in any previous analysis
         }}
 
         // GET PARTICLE INDICES FOR UNIQUENESS TRACKING
@@ -303,7 +303,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         // Cut Accidentals
         if(fabs(locDeltaT_RF) > 0.5 * 4.008) {
             dComboWrapper->Set_IsComboCut(true);
-            continue;
+            continue; // By default, if --cut-accidentals is used, never plot these in any histograms
         }
         Double_t locWeight = 1.0;
 """
@@ -350,6 +350,10 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
     if config.get("output"):
         source_text += """
+        // Don't output combos that were cut
+        if(dComboWrapper->Get_IsComboCut()) {
+            continue;
+        }
         // Fill labeling branches
         dFlatTreeInterface->Fill_Fundamental<UInt_t>("RunNumber", locRunNumber);
         dFlatTreeInterface->Fill_Fundamental<ULong64_t>("EventNumber", Get_EventNumber());
@@ -457,6 +461,8 @@ def main():
     treename, branches, particle_map, is_thrown = get_particle_map(str(input_path))
     if args.name:
         basename = args.name
+    elif config.get("name"):
+        basename = config["name"]
     else:
         basename = treename.replace("_Tree", "")
     output_source_path = Path(".") / f"DSelector_{basename}.C"
@@ -468,6 +474,13 @@ def main():
     config["treename"] = treename
     config["is_thrown"] = is_thrown
     config["folders"] = not args.no_folders
+    config["vectors"] = config.get("vectors", {})
+    config["boosts"] = config.get("boosts", {})
+    config["variables"] = config.get("variables", {})
+    config["cuts"] = config.get("cuts", {})
+    config["weights"] = config.get("weights", {})
+    config["uniqueness"] = config.get("uniqueness", {})
+    config["histograms"] = config.get("histograms", {})
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
         source.write(get_source(config, cut_accidentals=args.cut_accidentals))
         header.write(get_header(config))
