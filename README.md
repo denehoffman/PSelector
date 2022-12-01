@@ -340,4 +340,8 @@ v0.0.2
 v0.0.1
 - Initial Release
 
+## TODO
+
 Planned features will be added as issues arise. I can imagine there will be lots of very specific features or shorthands that might be appreciated. For example, we almost always want to calculate things like the Mandelstam "t" or the missing mass squared, so in the future I might implement a shorthand to do this automatically.
+
+- Need to figure out default behavior for adding more than one `uniqueness` block with `"all"` or `"none"` in the `particles` field when `--no-folders` is specified. This could be fixed by specifying some kind of additional `"name"` field in the `uniqueness` blocks maybe.
