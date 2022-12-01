@@ -67,7 +67,7 @@ class Uniqueness:
         outstring = ""
         if self.cuts is not None:
             outstring = "    " * indent + "if(!("
-            outstring += ") && !(".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
+            outstring += " || ".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
             outstring += ")) {\n"
         else:
             outstring = "    " * indent + "if(!dComboWrapper->Get_IsComboCut()) {\n" # if no cuts are listed, use all enabled cuts
