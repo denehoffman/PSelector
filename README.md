@@ -1,5 +1,19 @@
+
 # PSelector
 A pythonic version of the GlueX DSelector
+
+## Background
+The [MakeDSelector](https://github.com/JeffersonLab/gluex_root_analysis/blob/master/programs/MakeDSelector/MakeDSelector.cc) program was designed to generate a template based on the reaction topology of an input `ROOT` file. However, that is as far as its usefulness extends. Additionally, it adds a lot of commented-out optional code which is helpful when learning about analysis actions and the general workings of the `DSelector`. While this is useful to a new coder (every new GlueX worker should read through the default file created by this program to learn how it works), it makes mature `DSelector`s more difficult to read. The onus of deleting the cluttering comments and example code is put on the user, and [some of these default actions](https://github.com/JeffersonLab/gluex_root_analysis/blob/e80344f7700030251081531a462d66d56df28110/programs/MakeDSelector/MakeDSelector.cc#L257-L306) can be rather confusing for new users who see variables created with no internal use.
+
+These were some of my initial reasons for creating `MakePSelector`. This project was inspired by [Hao Li](https://github.com/lihaoahil)'s work on an alternative `MakeDSelector` program which takes an optional configuration file. In that case, the code was all written on top of the given `MakeDSelector` program, so it still kept the comments and boilerplate code mentioned above, but it allowed users to specify histograms in a single line of code, insert blocks of raw text as code in the final `DSelector`, and had the neat option to allow the user to generate 2D histograms out of two existing 1D histograms with a simple syntax. Hao's code also created a chained syntax for generating boosted versions of 4-vectors, similar to this program, as well as some syntax which handled uniqueness tracking.
+
+I have taken his work a step further by gauging which typical actions a user might take happen to have the same default code. For example, we might want to introduce a weight for each combo which is propagated into histograms. The syntax for creating cuts/selections rarely diverges from a simple if-statement. Histograms and boosts are also fairly standard in their implementation. There are additionally some fields which can be added to the configuration file to simplify workflows.
+
+For example, the default `MakeDSelector` requires a GlueX analysis `ROOT` tree as input. It uses this `TFile` to grab a map of the reaction topology from which it generates track wrappers and reaction steps. Entering the path for this file can be tedious depending on your file hierarchy, and it typically doesn't change at all between `DSelector`s. Without a configuration file, it's necessary to manually point the program to this file, but `MakePSelector` grabs the path from the `source` field, which means the user doesn't have to remember the path every time they make a change to the configuration. Similarly, the `MakeDSelector` program requires the name of the `TTree` inside the analysis tree. It is standard practice that `ROOT` analysis files only contain a single `TTree`, so selecting that tree is made the standard behavior of `MakePSelector`.
+
+Additional features include a unified syntax for making cuts, ways to specify additional 4-vectors (which can be included in boosts), blocks for adding raw C code to the `DSelector` through the configuration file, and methods which generate folders for each uniqueness tracking group. The latter can also be extended to create folders which contain sets of histograms with events which pass specified cuts. This allows the user to see the effect of each cut sequentially while still outputting a set of cuts.
+
+The configuration file is designed to be able to handle any standard analysis action. Special bits of code which modify the typical flow of a `DSelector` must be manually added to the resulting `.C` and `.h` files. If there is a specific instance of this which you believe might be useful for other users, feel free to fork this repository and add it, or let me know what features you would like to see.
 
 ## Usage
 ```
@@ -13,7 +27,8 @@ optional arguments:
   -n NAME, --name NAME  (optional) name for selector class and files, i.e.
                         "DSelector_<name>.C/.h". Defaults to tree name without
                         "_Tree"
-  -f, --force           force overwriting existing output files
+  --no-folders          don't generate folders for each uniqueness block (may
+                        be faster but less organized)
   --cut-accidentals     cut accidentals rather than subtract them
 ```
 
@@ -21,7 +36,7 @@ optional arguments:
 
 `MakePSelector` takes a configuration file as its only required argument. The details of this configuration file are listed below. The optional arguments are:
 - `--name` This allows you to change the output name of the DSelector files. For instance, we could use `MakePSelector config.json --name demo` to create files with the names `DSelector_demo.C` and `DSelector_demo.h`. If no arguemnt is used, this will default to the tree name minus the `_Tree` suffix, so a tree named `ksks__B4_Tree` would generate a DSelector named `DSelector_ksks__B4.C`.
-- `--force` This argument exists to prevent accidental overwriting of existing DSelectors. Using it will allow the `MakePSelector` script to overwrite a DSelector with the same name, while excluding it will throw an error and not write anything.
+- `--no-folders` disables the creation of subdirectories in the `ROOT` histogram output file. Use this if you want a flat histogram interface or for compatibility with other post-processing plotting tools which assume no directory structure. Otherwise, it is recommended to omit this flag to have more organized histograms.
 - `--cut-accidentals` switches the treatment of accidentals from the default (subraction by weighting them as -1/n where n is the number of out-of-time peaks) to selecting only the central beam peak.
 
 ## Writing a Configuration File
@@ -29,16 +44,13 @@ Configuration files for `MakePSelector` are written in TOML (Tom's Obvious, Mini
 ### Minimum Configuration:
 ```toml
 source = "path/to/source.root"
-[vectors]
-[boosts]
-[variables]
-[cuts]
-[weights]
-[uniqueness]
-[histograms]
 ```
+### Configuration Fields:
 #### source
 This field contains the (absolute) path to the template `ROOT` file containing a GlueX-formatted data `TTree`. `MakeDSelector` also inputs such a template file, but `MakePSelector` is intended to be run each time the configuration file is changed, so it would be an unneccessary hassle to have to type in the path every time.
+
+#### name
+The `name` field is optional and has the same behavior as the `--name` flag in the command-line interface. However, the `--name` flag will override this field if given.
 
 #### vectors
 This field contains a dictionary containing recipes to create `TLorentzVectors` which can be boosted along with the 4-momenta/4-positions which are created by default for each particle. For instance,
@@ -134,12 +146,13 @@ histograms = "all"
 [uniqueness.track_beam]
 particles = ["Beam"]
 histograms = ["MissingMassSquared"]
+cuts = ["select_hc"]
 
 [uniqueness.track_a_few]
 particles = ["PiPlus1", "PiMinus1"]
 histograms = "all"
 ```
-Note the use of "all" and "none" in the `particles` field. The keyword "none" is special and it allows you to add histograms which skip uniqueness tracking. Similarly, "all" is shorthand for including all of the trackable particles, including the beam. Finally, in the `histogram` field, "all" is a shorthand which applies this tracking to every histogram. Each tracking field creates copies of histograms with a "_<tracker name>" suffix added to them, although in the case of "all" particles, no suffix is added, and in the case of "none", the suffix "_allcombos" is added. Because of this, you cannot define multiple uniqueness trackers with "all" or "none" particle fields.
+Note the use of `"all"` and `"none"` in the `particles` field. The keyword `"none"` is special and it allows you to add histograms which skip uniqueness tracking. Similarly, `"all"` is shorthand for including all of the trackable particles, including the beam. Finally, in the `histogram` field, `"all"` is a shorthand which applies this tracking to every histogram. If the `--no-folders` option is used, each tracking field creates copies of histograms with a `_<tracker name>` suffix added to them, although in the case of `"all"` particles, no suffix is added, and in the case of `"none"`, the suffix `_allcombos` is added. Because of this, you cannot define multiple uniqueness trackers with "all" or "none" particle fields. However, without `--no-folders`,
 
 #### histograms
 The `histograms` field contains the information needed to create each histogram. There are several use cases, but the simplest histogram can be generated as:
@@ -207,7 +220,7 @@ x = "locKShort2HX.CosTheta()"
 What is the use of this? Well, suppose we had two identical kaons and we wanted to plot an angle in the kaon + kaon center-of-momentum frame. The kaons are back-to-back in this frame, so we could plot both of them in the same histogram by specifying that the `destination` of the second histogram is the first histogram. Using the `destination` field will cause the program to ignore everything except `x` and `y` fields for that particular histogram, essentially sending the `x` and/or `y` variables to the `destination`.
 
 #### output
-The `output` field allows the user to generate flat trees alongside the default output histograms and analysis trees. It is not a required field, so if it is omitted, no flat trees will be generated. However, if one wishes to flatten a tree, it is simple to do. The code below fills flat trees with all of the information required for an AmpTools analysis, for example:
+The `output` field allows the user to generate flat trees alongside the default output histograms and analysis trees. It is not a required field, so if it is omitted, no flat trees will be generated. However, if one wishes to flatten a tree, it is simple to do. The code below fills flat trees with all of the information required for an [AmpTools](https://github.com/mashephe/AmpTools) analysis, for example:
 ```toml
 [output.Total_Weight]
 name = "Weight"
@@ -301,7 +314,9 @@ The `MakePSelector` program can be installed by cloning this repository and runn
 ```
 pip3 install .
 ```
-in the root project directory. Due to the specificity of this program, I do not see the need to publish it to PyPI. When installed in this way it will make the `MakePSelector` script available for execution from any directory. Note that `MakePSelector` is written for `python3`. I will not write a version for `python2`, as it has been [deprecated/sunset since 2020 and is no longer supported](https://www.python.org/doc/sunset-python-2/). If you are still using `python2` for analysis, 99% of your code can be updated by simply converting your `print` statements.
+in the root project directory. Due to the specificity of this program, I do not see the need to publish it to PyPI. When installed in this way it will make the `MakePSelector` script available for execution from any directory. 
+
+> Note that `MakePSelector` is written for `python3`. I will not write a version for `python2`, as it has been [deprecated/sunset since 2020 and is no longer supported](https://www.python.org/doc/sunset-python-2/). If you are still using `python2` for analysis, 99% of your code can be updated by simply converting your `print` statements.
 
 ## Dependencies
 This program has two dependencies, [particle](https://github.com/scikit-hep/particle) from the Scikit-HEP group and [tomli](https://github.com/hukkin/tomli) which parses TOML files. However, if you are using Python 3.11 or later, the `tomllib` package is now native and will be used instead.
@@ -310,10 +325,19 @@ There is also a hidden `PyROOT` dependency. I wish this were not the case, but t
 
 ## Changelog
 
+v1.1.0
+- Added optional `name` field which can be overridden by `--name` flag
+- Removed `continue` statements from cuts. The default behavior now will be that everything survives till histograms are filled, `uniqueness` blocks without a `cuts` field and output (flat)trees will only be filled with combos that survived `enabled` cuts.
+	- This allows for the following behavior: The user specifies three sequential cuts, `cut1`, `cut2`, and `cut3`. They wish to see the effect of each sequential cut on their histograms. They can then create `uniqueness` blocks with `cuts = ["cut1"]`, `cuts = ["cut1", "cut2"]`, and one block which doesn't have the field for all of the cuts. The `enabled` keyword only effects this final block, as well as output (flat)trees, so the end result will contain three folders, one with histograms of events which pass `cut1`, another with events which pass `cut1` and `cut2`, and another with events which pass all enabled cuts.
+
+v1.0.0
+- Added the `cut` field to `uniqueness` blocks, allowing for histograms to only be plotted if they pass the specified cuts
+- Removed the `--force` option and made this the default behavior
+
 v0.0.2
 - Switched configuration file support from JSON to TOML
 
 v0.0.1
 - Initial Release
 
-Planned features will be added as issues arise. I can imagine there will be lots of very specific features or shorthands that might be appreciated. For example, we almost always want to calculate things like the Mandelstam t or the missing mass squared, so in the future I might implement a shorthand to do this automatically.
+Planned features will be added as issues arise. I can imagine there will be lots of very specific features or shorthands that might be appreciated. For example, we almost always want to calculate things like the Mandelstam "t" or the missing mass squared, so in the future I might implement a shorthand to do this automatically.
