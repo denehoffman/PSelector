@@ -80,7 +80,7 @@ class Uniqueness:
         outstring = ""
         if len(self.particles) == 0:
             outstring += self.fill_hists(indent=2, n_dir=n_dir)
-            outstring += "    " * (indent + 1) + "}\n"
+            outstring += "    " * indent + "}\n"
         elif len(self.particles) == 1:
             if self.particles[0] == "Beam":
                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}ID) == locUsedSoFar_{self.name}.end()) {{\n"
