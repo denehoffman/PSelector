@@ -310,7 +310,7 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     else:
         source_text += f"""
         // Subtract Accidentals
-        Double_t locHistAccidWeightFactor = (fabs(locDeltaT_RF) > 0.5 * 4.008) ? -1/{2 * n_out_of_time} : 1;
+        Double_t locHistAccidWeightFactor = (fabs(locDeltaT_RF) > 0.5 * 4.008) ? -1.0/{2 * n_out_of_time}.0 : 1.0;
         Double_t locWeight = locHistAccidWeightFactor;
 """
     # Define boost-related vectors here?
