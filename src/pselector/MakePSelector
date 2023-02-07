@@ -2,14 +2,118 @@
 from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight, FlatBranch
 import ROOT as root
 import argparse
-from pprint import pprint
 from pathlib import Path
 import re
-from particle import Particle
+from particle import Particle, ParticleNotFound, InvalidParticle
 try:
     import tomllib # native support in Python 3.11
 except ModuleNotFoundError:
     import tomli as tomllib
+
+def get_header_thrown(config):
+    particle_map = config["particle_map"]
+    basename = config["basename"]
+    header_text = f"""#ifndef DSelector_{basename}_h
+#define DSelector_{basename}_h
+
+#include <iostream>
+
+#include "DSelector/DSelector.h"
+#include "DSelector/DHistogramActions.h"
+#include "DSelector/DCutActions.h"
+
+#include "TH1D.h"
+#include "TH2D.h"
+
+class DSelector_{basename} : public DSelector {{
+
+    public:
+
+        DSelector_{basename}(TTree* locTree = NULL) : DSelector(locTree){{}}
+        virtual ~DSelector_{basename}(){{}}
+
+        void Init(TTree *tree);
+        Bool_t Process(Long64_t entry);
+
+    private:
+
+        void Get_ComboWrappers(void);
+        void Finalize(void);
+
+        // BEAM POLARIZATION INFORMATION
+        UInt_t dPreviousRunNumber;
+        bool dIsPolarizedFlag; //else is AMO
+        bool dIsPARAFlag; //else is PERP or AMO
+
+        bool dIsMC;
+        ClassDef(DSelector_{basename}, 0);
+}};
+
+#endif // DSelector_{basename}_h"
+"""
+    return header_text
+
+def get_source_thrown(config, cut_accidentals=False):
+    treename = config["treename"]
+    particle_map = config["particle_map"]
+    basename = config["basename"]
+    source_text = f"""#include "DSelector_{basename}.h"
+void {basename}::Init(TTree *locTree){{
+    dOutputFileName = hist_{basename}.root;
+    bool locInitializedPriorFlag = dInitializedFlag;
+    DSelector::Init(locTree);
+    if(locInitializedPriorFlag){{return;}}
+    dPreviousRunNumber = 0;
+    // HISTOGRAMS
+}}
+Bool_t {basename}::Process(Long64_t locEntry) {{
+    DSelector::Process(locEntry);
+    UInt_t locRunNumber = Get_RunNumber();
+    if(locRunNumber != dPreviousRunNumber) {{
+        dIsPolarizedFlag = dAnalysisUtilities.Get_IsPolarizedBeam(locRunNumber, dIsPARAFlag);
+        dPreviousRunNumber = locRunNumber;
+    }}
+"""
+    decaying_names = config["thrown"]["decaying"]
+    for unique_name in set(decaying_names):
+        if decaying_names.count(unique_name) == 1:
+            source_text += f"    TLorentzVector locDecaying{unique_name}P4;\n"
+        else:
+            source_text += f"    int {unique_name}Counter = 1;\n"
+            for j in range(decaying_names.count(unique_name)):
+                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}P4;\n"
+    other_names = config["thrown"]["other"]
+    for unique_name in set(other_names):
+        if other_names.count(unique_name) == 1:
+            source_text += f"    TLorentzVector loc{unique_name}P4;\n"
+        else:
+            source_text += f"    int {unique_name}Counter = 1;\n"
+            for j in range(other_names.count(unique_name)):
+                source_text += f"    TLorentzVector loc{unique_name}{j + 1}P4;\n"
+    source_text += f"""
+    for(UInt_t i = 0; i < Get_NumThrown(); i++) {{
+        dThrownWrapper->Set_ArrayIndex(loc_i);
+        Particle_t locPID = dThrownWrapper->Get_PID();
+"""
+    for unique_name in set(decaying_names):
+        if decaying_names.count(unique_name) == 1:
+            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{locDecaying{unique_name}P4 = dThrownWrapper->Get_P4();}}\n"
+        else:
+            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
+            for j in range(decaying_names.count(unique_name)):
+                source_text += f"            if({unique_name}Counter == {j + 1}){{locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();}}\n"
+            source_text += f"        }}\n"
+    for unique_name in set(other_names):
+        if other_names.count(unique_name) == 1:
+            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{loc{unique_name}P4 = dThrownWrapper->Get_P4();}}\n"
+        else:
+            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
+            for j in range(other_names.count(unique_name)):
+                source_text += f"            if({unique_name}Counter == {j + 1}){{loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();}}\n"
+            source_text += f"        }}\n"
+    source_text += f"    }}\n"
+    source_text += f"}}"
+    return source_text
 
 ############# WRITE HEADER ###############
 def get_header(config):
@@ -481,9 +585,14 @@ def main():
     config["weights"] = config.get("weights", {})
     config["uniqueness"] = config.get("uniqueness", {})
     config["histograms"] = config.get("histograms", {})
+    config["thrown"] = config.get("thrown", {"decaying": [], "other": []})
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
-        source.write(get_source(config, cut_accidentals=args.cut_accidentals))
-        header.write(get_header(config))
+        if is_thrown:
+            source.write(get_source_thrown(config, cut_accidentals=args.cut_accidentals))
+            header.write(get_header_thrown(config))
+        else:
+            source.write(get_source(config, cut_accidentals=args.cut_accidentals))
+            header.write(get_header(config))
 
 if __name__ == "__main__":
     main()
