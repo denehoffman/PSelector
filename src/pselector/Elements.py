@@ -1,7 +1,11 @@
 class Uniqueness:
-    def __init__(self, name, config, particle_map):
+    def __init__(self, name, config, particle_map, is_thrown=False):
         self.config = config
-        self.uniqueness_config = config["uniqueness"][name]
+        if is_thrown:
+            self.uniqueness_config = {"histograms": "all", "particles": "none", "folder": "thrown_histograms"}
+        else:
+            self.uniqueness_config = config["uniqueness"][name]
+        self.check_safe = is_thrown
         self.histograms = self.uniqueness_config["histograms"]
         self.particle_map = particle_map
         if self.histograms == "all":
@@ -34,6 +38,8 @@ class Uniqueness:
                         self.particles.append(particle.get("name"))
         elif self.particles == "none":
             self.tag = "_allcombos"
+            if is_thrown:
+                self.tag = ""
             self.particles = []
         else:
             self.tag = f"_{name}"
@@ -53,6 +59,9 @@ class Uniqueness:
         outstring = ""
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
+            if self.check_safe:
+                if not hist.safe:
+                    continue
             outstring += hist.header_string(tag=self.tag, indent=indent)
         return outstring
 
@@ -60,6 +69,9 @@ class Uniqueness:
         outstring = ""
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
+            if self.check_safe:
+                if not hist.safe:
+                    continue
             outstring += hist.init_string(tag=self.tag, indent=indent, n_dir=n_dir)
         return outstring
 
@@ -73,6 +85,9 @@ class Uniqueness:
             outstring = "    " * indent + "if(!dComboWrapper->Get_IsComboCut()) {\n" # if no cuts are listed, use all enabled cuts
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
+            if self.check_safe:
+                if not hist.safe:
+                    continue
             outstring += hist.fill_string(tag=self.tag, indent=indent+1, n_dir=n_dir)
         return outstring
 
@@ -122,6 +137,7 @@ class Histogram:
         self.histogram_config = self.config["histograms"][name]
         self.tag = name
         self.has_destination = False
+        self.safe = self.histogram_config.get("safe", False)
         if "destination" in self.histogram_config.keys(): # option for double-filling
             self.tag = self.histogram_config["destination"]
             self.has_destination = True
@@ -211,6 +227,7 @@ class Boost:
         self.name = name
         self.tag = f"_{name}"
         self.boost_config = config["boosts"][name]
+        self.safe = self.boost_config.get("safe", False)
         self.boost_vector = self.boost_config["boostvector"]
         self.vector_names = vector_names
         self.from_name = from_name
@@ -241,6 +258,7 @@ class Cut:
         self.name = name
         self.config = config
         self.cut_config = self.config['cuts'][name]
+        self.safe = self.cut_config.get("safe", False)
 
     def cut_string(self, indent=2):
         outstring = ""
@@ -256,6 +274,7 @@ class Weight:
         self.name = name
         self.config = config
         self.weight_config = self.config['weights'][name]
+        self.safe = self.weight_config.get("safe", False)
 
     def weight_string(self, indent=2):
         outstring = ""
@@ -277,6 +296,7 @@ class FlatBranch:
         self.name = name
         self.config = config
         self.branch_config = self.config['output'][name]
+        self.safe = self.branch_config.get("safe", False)
         self.isArray = bool(self.branch_config.get('array'))
         self.num_name = ""
         if self.isArray:
