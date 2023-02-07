@@ -47,7 +47,7 @@ class DSelector_{basename} : public DSelector {{
 
         bool dIsMC;
         ClassDef(DSelector_{basename}, 0);
-}};
+}}
 
 #endif // DSelector_{basename}_h"
 """
@@ -58,7 +58,9 @@ def get_source_thrown(config, cut_accidentals=False):
     particle_map = config["particle_map"]
     basename = config["basename"]
     source_text = f"""#include "DSelector_{basename}.h"
-void {basename}::Init(TTree *locTree){{
+
+void DSelector_{basename}::Init(TTree *locTree){{
+
     dOutputFileName = hist_{basename}.root;
     bool locInitializedPriorFlag = dInitializedFlag;
     DSelector::Init(locTree);
@@ -66,7 +68,9 @@ void {basename}::Init(TTree *locTree){{
     dPreviousRunNumber = 0;
     // HISTOGRAMS
 }}
-Bool_t {basename}::Process(Long64_t locEntry) {{
+
+Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
+
     DSelector::Process(locEntry);
     UInt_t locRunNumber = Get_RunNumber();
     if(locRunNumber != dPreviousRunNumber) {{
@@ -74,22 +78,30 @@ Bool_t {basename}::Process(Long64_t locEntry) {{
         dPreviousRunNumber = locRunNumber;
     }}
 """
+    # Get the beam vectors
+    source_text += f"    TLorentzVector locBeamP4 = dThrownBeam->Get_P4();\n"
+    source_text += f"    TLorentzVector locBeamX4 = dThrownBeam->Get_X4();\n"
+    # Get the thrown vectors
     decaying_names = config["thrown"]["decaying"]
     for unique_name in set(decaying_names):
         if decaying_names.count(unique_name) == 1:
             source_text += f"    TLorentzVector locDecaying{unique_name}P4;\n"
+            source_text += f"    TLorentzVector locDecaying{unique_name}X4;\n"
         else:
             source_text += f"    int {unique_name}Counter = 1;\n"
             for j in range(decaying_names.count(unique_name)):
                 source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}P4;\n"
+                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}X4;\n"
     other_names = config["thrown"]["other"]
     for unique_name in set(other_names):
         if other_names.count(unique_name) == 1:
             source_text += f"    TLorentzVector loc{unique_name}P4;\n"
+            source_text += f"    TLorentzVector loc{unique_name}X4;\n"
         else:
             source_text += f"    int {unique_name}Counter = 1;\n"
             for j in range(other_names.count(unique_name)):
                 source_text += f"    TLorentzVector loc{unique_name}{j + 1}P4;\n"
+                source_text += f"    TLorentzVector loc{unique_name}{j + 1}X4;\n"
     source_text += f"""
     for(UInt_t i = 0; i < Get_NumThrown(); i++) {{
         dThrownWrapper->Set_ArrayIndex(loc_i);
@@ -97,20 +109,38 @@ Bool_t {basename}::Process(Long64_t locEntry) {{
 """
     for unique_name in set(decaying_names):
         if decaying_names.count(unique_name) == 1:
-            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{locDecaying{unique_name}P4 = dThrownWrapper->Get_P4();}}\n"
+            source_text += f"""        if(ParticleEnum({unique_name}) == locPID){{
+            locDecaying{unique_name}P4 = dThrownWrapper->Get_P4();
+            locDecaying{unique_name}X4 = dThrownWrapper->Get_X4();
+        }}
+"""
         else:
             source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
             for j in range(decaying_names.count(unique_name)):
-                source_text += f"            if({unique_name}Counter == {j + 1}){{locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();}}\n"
+                source_text += f"""            if({unique_name}Counter == {j + 1}){{
+                locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
+                locDecaying{unique_name}{j + 1}X4 = dThrownWrapper->Get_P4();
+            }}
+"""
             source_text += f"        }}\n"
+            source_text += f"        {unique_name}Counter += 1;\n"
     for unique_name in set(other_names):
         if other_names.count(unique_name) == 1:
-            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{loc{unique_name}P4 = dThrownWrapper->Get_P4();}}\n"
+            source_text += f"""        if(ParticleEnum({unique_name}) == locPID){{
+            loc{unique_name}P4 = dThrownWrapper->Get_P4();
+            loc{unique_name}X4 = dThrownWrapper->Get_X4();
+        }}
+"""
         else:
             source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
             for j in range(other_names.count(unique_name)):
-                source_text += f"            if({unique_name}Counter == {j + 1}){{loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();}}\n"
+                source_text += f"""            if({unique_name}Counter == {j + 1}){{
+                loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
+                loc{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
+            }}
+"""
             source_text += f"        }}\n"
+            source_text += f"        {unique_name}Counter += 1;\n"
     source_text += f"    }}\n"
     source_text += f"}}"
     return source_text
@@ -506,6 +536,8 @@ def get_particle_map(path):
     treename = str(f.GetListOfKeys()[0].GetName())
     tree = f.Get(treename)
     branches = [str(key.GetName()) for key in tree.GetListOfBranches()]
+    if "NumThrown" in branches:
+        return treename, branches, [], True
     userinfo = tree.GetUserInfo()
     name_to_pid = userinfo.FindObject("NameToPIDMap")
     pos_to_name = userinfo.FindObject("PositionToNameMap")
@@ -534,7 +566,7 @@ def get_particle_map(path):
     output_sorted = []
     for step_list in output:
         output_sorted.append(sorted(step_list, key=lambda d: d.get("index")))
-    return treename, branches, output_sorted, ("NumThrown" in branches)
+    return treename, branches, output_sorted, False
 
 def main():
     parser_desc = """
