@@ -44,14 +44,13 @@ class DSelector_{basename} : public DSelector {{
         UInt_t dPreviousRunNumber;
         bool dIsPolarizedFlag; //else is AMO
         bool dIsPARAFlag; //else is PERP or AMO
-
         bool dIsMC;
-        ClassDef(DSelector_{basename}, 0);
 """
     uniqueness = Uniqueness("thrown", config, [], is_thrown=True)
     header_text += uniqueness.header_hists()
-    header_text += """
-}}
+    header_text += f"""
+        ClassDef(DSelector_{basename}, 0);
+}};
 
 #endif // DSelector_{basename}_h"
 """
@@ -66,18 +65,17 @@ def get_source_thrown(config, cut_accidentals=False):
 void DSelector_{basename}::Init(TTree *locTree){{
 
     dOutputFileName = "hist_{basename}.root";
-    dOutputTreeFileName = "tree_{basename}.root";
-"""
+    dOutputTreeFileName = "tree_{basename}.root";"""
     if config.get("output"):
         source_text += f"""
-        dFlatTreeFileName = "flat_{basename}.root";
-        dFlatTreeName = "kin";
-        dSaveDefaultFlatBranches = false;"""
+    dFlatTreeFileName = "flat_{basename}.root";
+    dFlatTreeName = "kin";
+    dSaveDefaultFlatBranches = false;"""
     else:
         source_text += f"""
-        dFlatTreeFileName = "";
-        dFlatTreeName = "";"""
-    source_text += """
+    dFlatTreeFileName = "";
+    dFlatTreeName = "";"""
+    source_text += f"""
     bool locInitializedPriorFlag = dInitializedFlag;
     DSelector::Init(locTree);
     if(locInitializedPriorFlag){{return;}}
@@ -94,14 +92,12 @@ void DSelector_{basename}::Init(TTree *locTree){{
     dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("ComboNumber");
 """
         for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
-            if flatbranch.safe:
-                if flatbranch.isArray:
-                    if not flatbranch.num_name in num_names:
-                        num_names.append(flatbranch.num_name) 
-                        source_text += flatbranch.init_num_string()
-                source_text += flatbranch.init_string()
-    source_text += """
-}}
+            if flatbranch.isArray:
+                if not flatbranch.num_name in num_names:
+                    num_names.append(flatbranch.num_name) 
+                    source_text += flatbranch.init_num_string()
+            source_text += flatbranch.init_string()
+    source_text += f"""}}
 
 Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 
@@ -144,63 +140,58 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 vector_names.append(f"loc{unique_name}{j + 1}P4")
     source_text += f"""
     for(UInt_t i = 0; i < Get_NumThrown(); i++) {{
-        dThrownWrapper->Set_ArrayIndex(loc_i);
+        dThrownWrapper->Set_ArrayIndex(i);
         Particle_t locPID = dThrownWrapper->Get_PID();
 """
     for unique_name in set(decaying_names):
         if decaying_names.count(unique_name) == 1:
-            source_text += f"""        if(ParticleEnum({unique_name}) == locPID){{
+            source_text += f"""        if(locPID == {unique_name}) {{
             locDecaying{unique_name}P4 = dThrownWrapper->Get_P4();
             locDecaying{unique_name}X4 = dThrownWrapper->Get_X4();
         }}
 """
         else:
-            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
+            source_text += f"        if(locPID == {unique_name}) {{\n"
             for j in range(decaying_names.count(unique_name)):
-                source_text += f"""            if({unique_name}Counter == {j + 1}){{
+                source_text += f"""            if({unique_name}Counter == {j + 1}) {{
                 locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
-                locDecaying{unique_name}{j + 1}X4 = dThrownWrapper->Get_P4();
+                locDecaying{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
             }}
 """
+            source_text += f"            {unique_name}Counter += 1;\n"
             source_text += f"        }}\n"
-            source_text += f"        {unique_name}Counter += 1;\n"
     for unique_name in set(other_names):
         if other_names.count(unique_name) == 1:
-            source_text += f"""        if(ParticleEnum({unique_name}) == locPID){{
+            source_text += f"""        if(locPID == {unique_name}) {{
             loc{unique_name}P4 = dThrownWrapper->Get_P4();
             loc{unique_name}X4 = dThrownWrapper->Get_X4();
         }}
 """
         else:
-            source_text += f"        if(ParticleEnum({unique_name}) == locPID){{\n"
+            source_text += f"        if(locPID == {unique_name}) {{\n"
             for j in range(other_names.count(unique_name)):
-                source_text += f"""            if({unique_name}Counter == {j + 1}){{
+                source_text += f"""            if({unique_name}Counter == {j + 1}) {{
                 loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
                 loc{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
             }}
 """
+            source_text += f"            {unique_name}Counter += 1;\n"
             source_text += f"        }}\n"
-            source_text += f"        {unique_name}Counter += 1;\n"
     source_text += f"    }}\n"
     for key, val in config["vectors"].items():
         source_text += f"    TLorentzVector {key} = {val};\n"
         vector_names.append(key)
     source_text += "\n"
     for boost in [Boost(name, config, vector_names) for name in config["boosts"].keys()]:
-        if boost.safe:
-            source_text += boost.boost_string()
-    source_text += "\n\n"
-    for cut in [Cut(name, config) for name in config["cuts"].keys()]:
-        if cut.safe:
-            source_text += f"\n    // CUT: {cut.name}\n"
-            source_text += cut.cut_string()
-    source_text += "\n\n"
-    for weight in [Weight(name, config) for name in config["weights"].keys()]:
-        if weight.safe:
-            source_text += f"\n        // WEIGHT: {weight.name}\n"
-            source_text += weight.weight_string()
-    source_text += "\n\n"
-    source_text += uniqueness.fill_string()
+        source_text += boost.boost_string(indent=1)
+        source_text += "\n\n"
+    for varname, varcode in config["variables"].items():
+        source_text += "\n"
+        source_text += f"    // {varname}\n"
+        for line in varcode.splitlines():
+            source_text += "    " + line + "\n"
+    source_text += "    Double_t locWeight = 1.0;\n"
+    source_text += uniqueness.fill_string(indent=1)
     source_text += "\n\n"
     if config.get("output"):
         source_text += """
@@ -211,16 +202,15 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 """
     num_names = []
     for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
-        if flatbranch.safe:
-            if flatbranch.isArray:
-                if not flatbranch.num_name in num_names:
-                    num_names.append(flatbranch.num_name)
-                    source_text += flatbranch.fill_num_string()
-            source_text += flatbranch.fill_string()
+        if flatbranch.isArray:
+            if not flatbranch.num_name in num_names:
+                num_names.append(flatbranch.num_name)
+                source_text += flatbranch.fill_num_string(indent=1)
+        source_text += flatbranch.fill_string(indent=1)
     source_text += f"""
-    Fill_FlatTree();
-    Fill_NumCombosSurvivedHists();
+    if(dFlatTreeFileName != "") {{Fill_FlatTree();}}
     if(dOutputTreeFileName != "") {{Fill_OutputTree();}}
+    return kTRUE;
 }}
 
 void DSelector_{basename}::Finalize(void) {{
