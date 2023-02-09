@@ -3,7 +3,7 @@ from pathlib import Path
 SRC = Path(__file__).parent / "src/pselector"
 setup(
     name="pselector",
-    version="1.1.2",
+    version="1.2.0",
     author="Nathaniel Dene Hoffman",
     author_email="dene@cmu.edu",
     maintainer="Nathaniel Dene Hoffman",
