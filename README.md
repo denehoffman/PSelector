@@ -334,6 +334,9 @@ There is also a hidden `PyROOT` dependency. I wish this were not the case, but t
 
 ## Changelog
 
+v1.2.0
+- Added code to handle thrown Monte Carlo analysis trees with the `thrown` field
+
 v1.1.0
 - Added optional `name` field which can be overridden by `--name` flag
 - Removed `continue` statements from cuts. The default behavior now will be that everything survives till histograms are filled, `uniqueness` blocks without a `cuts` field and output (flat)trees will only be filled with combos that survived `enabled` cuts.
