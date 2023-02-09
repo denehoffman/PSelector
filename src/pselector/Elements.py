@@ -74,13 +74,13 @@ class Uniqueness:
         for hist_name in self.histograms:
             hist = Histogram(hist_name, self.config)
             outstring += hist.fill_string(tag=self.tag, indent=indent+1, n_dir=n_dir)
-        outstring += "    " * indent + "}\n"
         return outstring
 
     def fill_string(self, indent=2, n_dir=-1):
         outstring = ""
         if len(self.particles) == 0:
             outstring += self.fill_hists(indent=2, n_dir=n_dir)
+            outstring += "    " * indent + "}\n"
         elif len(self.particles) == 1:
             if self.particles[0] == "Beam":
                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}ID) == locUsedSoFar_{self.name}.end()) {{\n"
@@ -93,7 +93,8 @@ class Uniqueness:
                             else:
                                 outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(loc{self.particles[0]}NeutralID)) == locUsedSoFar_{self.name}.end()) {{\n"
             outstring += self.fill_hists(n_dir=n_dir)
-            outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(loc{self.particles[0]}ID);\n"
+            outstring += "    " * (indent + 2) + f"locUsedSoFar_{self.name}.insert(loc{self.particles[0]}ID);\n"
+            outstring += "    " * (indent + 1) + "}\n"
             outstring += "    " * indent + "}\n"
         else:
             outstring += "    " * indent + f"map<Particle_t, set<Int_t>> locUsedThisCombo_{self.name};\n"
@@ -110,7 +111,8 @@ class Uniqueness:
                                     outstring += "    " * indent + f"locUsedThisCombo_{self.name}[PDGtoPType({particle.get('pid')})].insert(loc{tracked_particle}NeutralID);\n"
             outstring += "    " * indent + f"if(locUsedSoFar_{self.name}.find(locUsedThisCombo_{self.name}) == locUsedSoFar_{self.name}.end()) {{\n"
             outstring += self.fill_hists(n_dir=n_dir)
-            outstring += "    " * (indent + 1) + f"locUsedSoFar_{self.name}.insert(locUsedThisCombo_{self.name});\n"
+            outstring += "    " * (indent + 2) + f"locUsedSoFar_{self.name}.insert(locUsedThisCombo_{self.name});\n"
+            outstring += "    " * (indent + 1) + "}\n"
             outstring += "    " * indent + "}\n"
         return outstring
 
