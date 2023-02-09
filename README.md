@@ -52,6 +52,15 @@ This field contains the (absolute) path to the template `ROOT` file containing a
 #### name
 The `name` field is optional and has the same behavior as the `--name` flag in the command-line interface. However, the `--name` flag will override this field if given.
 
+#### thrown
+The `thrown` field is only read if the `source` file is a thrown/generated Monte Carlo analysis tree. These trees do not contain combos, so a completely different kind of DSelector must be written for them. They have an array which lists the particles included in the event, but the order of these particles might change depending on the event topology or generator method, so assigning particles by index isn't always reliable. Instead, we can use some code to loop through the particle IDs to assign them to the proper 4-vectors. To do this, there are two subfields, `decaying` and `other`, which accept a list of particle names which follow the conventions of [particleType.h](https://github.com/JeffersonLab/halld_recon/blob/master/src/libraries/include/particleType.h), particularly they are the exact string associated with the particle's enum, so a $\pi^0$ would be written as `Pi0`, a $K_S^0$ as `KShort`, and a $\bar{\Sigma}^+$ as `AntiSigmaPlus`, and so on. Identical particle names will result in the addition of a number (`1`-indexed) after the name of the particle's 4-vectors. For example,
+```toml
+[thrown]
+decaying = ["KShort", "KShort"]
+other = ["Proton"]
+```
+will result in the definition of three 4-momenta, called `locDecayingKShort1P4`, `locDecayingKShort2P4`, and `locProtonP4` respectively. `locBeamP4` is always created and should not be specified here. It is up to the user to make the necessary arrangements such that the thrown code doesn't access any properties which aren't available in thrown trees. Additionally, all cuts and uniqueness tracking will be omitted from the generated code, since cuts on thrown Monte Carlo are generally not needed and uniqueness tracking makes no sense without combos.
+
 #### vectors
 This field contains a dictionary containing recipes to create `TLorentzVectors` which can be boosted along with the 4-momenta/4-positions which are created by default for each particle. For instance,
 ```toml
