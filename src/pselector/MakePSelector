@@ -2,14 +2,221 @@
 from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight, FlatBranch
 import ROOT as root
 import argparse
-from pprint import pprint
 from pathlib import Path
 import re
-from particle import Particle
+from particle import Particle, ParticleNotFound, InvalidParticle
 try:
     import tomllib # native support in Python 3.11
 except ModuleNotFoundError:
     import tomli as tomllib
+
+def get_header_thrown(config):
+    particle_map = config["particle_map"]
+    basename = config["basename"]
+    header_text = f"""#ifndef DSelector_{basename}_h
+#define DSelector_{basename}_h
+
+#include <iostream>
+
+#include "DSelector/DSelector.h"
+#include "DSelector/DHistogramActions.h"
+#include "DSelector/DCutActions.h"
+
+#include "TH1D.h"
+#include "TH2D.h"
+
+class DSelector_{basename} : public DSelector {{
+
+    public:
+
+        DSelector_{basename}(TTree* locTree = NULL) : DSelector(locTree){{}}
+        virtual ~DSelector_{basename}(){{}}
+
+        void Init(TTree *tree);
+        Bool_t Process(Long64_t entry);
+
+    private:
+
+        void Get_ComboWrappers(void);
+        void Finalize(void);
+
+        // BEAM POLARIZATION INFORMATION
+        UInt_t dPreviousRunNumber;
+        bool dIsPolarizedFlag; //else is AMO
+        bool dIsPARAFlag; //else is PERP or AMO
+        bool dIsMC;
+"""
+    uniqueness = Uniqueness("thrown", config, [], is_thrown=True)
+    header_text += uniqueness.header_hists()
+    header_text += f"""
+        ClassDef(DSelector_{basename}, 0);
+}};
+
+#endif // DSelector_{basename}_h"
+"""
+    return header_text
+
+def get_source_thrown(config, cut_accidentals=False):
+    treename = config["treename"]
+    particle_map = config["particle_map"]
+    basename = config["basename"]
+    source_text = f"""#include "DSelector_{basename}.h"
+
+void DSelector_{basename}::Init(TTree *locTree){{
+
+    dOutputFileName = "hist_{basename}.root";
+    dOutputTreeFileName = "tree_{basename}.root";"""
+    if config.get("output"):
+        source_text += f"""
+    dFlatTreeFileName = "flat_{basename}.root";
+    dFlatTreeName = "kin";
+    dSaveDefaultFlatBranches = false;"""
+    else:
+        source_text += f"""
+    dFlatTreeFileName = "";
+    dFlatTreeName = "";"""
+    source_text += f"""
+    bool locInitializedPriorFlag = dInitializedFlag;
+    DSelector::Init(locTree);
+    if(locInitializedPriorFlag){{return;}}
+    dPreviousRunNumber = 0;
+    // HISTOGRAMS
+"""
+    uniqueness = Uniqueness("thrown", config, [], is_thrown=True)
+    source_text += uniqueness.init_hists()
+    if config.get("output"):
+        num_names = []
+        source_text += """
+    dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("RunNumber");
+    dFlatTreeInterface->Create_Branch_Fundamental<ULong64_t>("EventNumber");
+    dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("ComboNumber");
+"""
+        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+            if flatbranch.isArray:
+                if not flatbranch.num_name in num_names:
+                    num_names.append(flatbranch.num_name) 
+                    source_text += flatbranch.init_num_string()
+            source_text += flatbranch.init_string()
+    source_text += f"""}}
+
+Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
+
+    DSelector::Process(locEntry);
+    UInt_t locRunNumber = Get_RunNumber();
+    if(locRunNumber != dPreviousRunNumber) {{
+        dIsPolarizedFlag = dAnalysisUtilities.Get_IsPolarizedBeam(locRunNumber, dIsPARAFlag);
+        dPreviousRunNumber = locRunNumber;
+    }}
+"""
+    source_text += uniqueness.init_string()
+    # Get the beam vectors
+    vector_names = ["locBeamP4"]
+    source_text += f"    TLorentzVector locBeamP4 = dThrownBeam->Get_P4();\n"
+    source_text += f"    TLorentzVector locBeamX4 = dThrownBeam->Get_X4();\n"
+    # Get the thrown vectors
+    decaying_names = config["thrown"]["decaying"]
+    for unique_name in set(decaying_names):
+        if decaying_names.count(unique_name) == 1:
+            source_text += f"    TLorentzVector locDecaying{unique_name}P4;\n"
+            source_text += f"    TLorentzVector locDecaying{unique_name}X4;\n"
+            vector_names.append(f"locDecaying{unique_name}P4")
+        else:
+            source_text += f"    int {unique_name}Counter = 1;\n"
+            for j in range(decaying_names.count(unique_name)):
+                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}P4;\n"
+                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}X4;\n"
+                vector_names.append(f"locDecaying{unique_name}{j + 1}P4")
+    other_names = config["thrown"]["other"]
+    for unique_name in set(other_names):
+        if other_names.count(unique_name) == 1:
+            source_text += f"    TLorentzVector loc{unique_name}P4;\n"
+            source_text += f"    TLorentzVector loc{unique_name}X4;\n"
+            vector_names.append(f"loc{unique_name}P4")
+        else:
+            source_text += f"    int {unique_name}Counter = 1;\n"
+            for j in range(other_names.count(unique_name)):
+                source_text += f"    TLorentzVector loc{unique_name}{j + 1}P4;\n"
+                source_text += f"    TLorentzVector loc{unique_name}{j + 1}X4;\n"
+                vector_names.append(f"loc{unique_name}{j + 1}P4")
+    source_text += f"""
+    for(UInt_t i = 0; i < Get_NumThrown(); i++) {{
+        dThrownWrapper->Set_ArrayIndex(i);
+        Particle_t locPID = dThrownWrapper->Get_PID();
+"""
+    for unique_name in set(decaying_names):
+        if decaying_names.count(unique_name) == 1:
+            source_text += f"""        if(locPID == {unique_name}) {{
+            locDecaying{unique_name}P4 = dThrownWrapper->Get_P4();
+            locDecaying{unique_name}X4 = dThrownWrapper->Get_X4();
+        }}
+"""
+        else:
+            source_text += f"        if(locPID == {unique_name}) {{\n"
+            for j in range(decaying_names.count(unique_name)):
+                source_text += f"""            if({unique_name}Counter == {j + 1}) {{
+                locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
+                locDecaying{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
+            }}
+"""
+            source_text += f"            {unique_name}Counter += 1;\n"
+            source_text += f"        }}\n"
+    for unique_name in set(other_names):
+        if other_names.count(unique_name) == 1:
+            source_text += f"""        if(locPID == {unique_name}) {{
+            loc{unique_name}P4 = dThrownWrapper->Get_P4();
+            loc{unique_name}X4 = dThrownWrapper->Get_X4();
+        }}
+"""
+        else:
+            source_text += f"        if(locPID == {unique_name}) {{\n"
+            for j in range(other_names.count(unique_name)):
+                source_text += f"""            if({unique_name}Counter == {j + 1}) {{
+                loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
+                loc{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
+            }}
+"""
+            source_text += f"            {unique_name}Counter += 1;\n"
+            source_text += f"        }}\n"
+    source_text += f"    }}\n"
+    for key, val in config["vectors"].items():
+        source_text += f"    TLorentzVector {key} = {val};\n"
+        vector_names.append(key)
+    source_text += "\n"
+    for boost in [Boost(name, config, vector_names) for name in config["boosts"].keys()]:
+        source_text += boost.boost_string(indent=1)
+        source_text += "\n\n"
+    for varname, varcode in config["variables"].items():
+        source_text += "\n"
+        source_text += f"    // {varname}\n"
+        for line in varcode.splitlines():
+            source_text += "    " + line + "\n"
+    source_text += "    Double_t locWeight = 1.0;\n"
+    source_text += uniqueness.fill_string(indent=1)
+    source_text += "\n\n"
+    if config.get("output"):
+        source_text += """
+    // Fill labeling branches
+    dFlatTreeInterface->Fill_Fundamental<UInt_t>("RunNumber", locRunNumber);
+    dFlatTreeInterface->Fill_Fundamental<ULong64_t>("EventNumber", Get_EventNumber());
+    dFlatTreeInterface->Fill_Fundamental<UInt_t>("ComboNumber", 0); // Thrown trees do not have combos
+"""
+    num_names = []
+    for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+        if flatbranch.isArray:
+            if not flatbranch.num_name in num_names:
+                num_names.append(flatbranch.num_name)
+                source_text += flatbranch.fill_num_string(indent=1)
+        source_text += flatbranch.fill_string(indent=1)
+    source_text += f"""
+    if(dFlatTreeFileName != "") {{Fill_FlatTree();}}
+    if(dOutputTreeFileName != "") {{Fill_OutputTree();}}
+    return kTRUE;
+}}
+
+void DSelector_{basename}::Finalize(void) {{
+    DSelector::Finalize();
+}}"""
+    return source_text
 
 ############# WRITE HEADER ###############
 def get_header(config):
@@ -402,6 +609,8 @@ def get_particle_map(path):
     treename = str(f.GetListOfKeys()[0].GetName())
     tree = f.Get(treename)
     branches = [str(key.GetName()) for key in tree.GetListOfBranches()]
+    if "NumThrown" in branches:
+        return treename, branches, [], True
     userinfo = tree.GetUserInfo()
     name_to_pid = userinfo.FindObject("NameToPIDMap")
     pos_to_name = userinfo.FindObject("PositionToNameMap")
@@ -430,7 +639,7 @@ def get_particle_map(path):
     output_sorted = []
     for step_list in output:
         output_sorted.append(sorted(step_list, key=lambda d: d.get("index")))
-    return treename, branches, output_sorted, ("NumThrown" in branches)
+    return treename, branches, output_sorted, False
 
 def main():
     parser_desc = """
@@ -481,9 +690,14 @@ def main():
     config["weights"] = config.get("weights", {})
     config["uniqueness"] = config.get("uniqueness", {})
     config["histograms"] = config.get("histograms", {})
+    config["thrown"] = config.get("thrown", {"decaying": [], "other": []})
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
-        source.write(get_source(config, cut_accidentals=args.cut_accidentals))
-        header.write(get_header(config))
+        if is_thrown:
+            source.write(get_source_thrown(config, cut_accidentals=args.cut_accidentals))
+            header.write(get_header_thrown(config))
+        else:
+            source.write(get_source(config, cut_accidentals=args.cut_accidentals))
+            header.write(get_header(config))
 
 if __name__ == "__main__":
     main()

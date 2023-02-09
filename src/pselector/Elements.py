@@ -1,7 +1,11 @@
 class Uniqueness:
-    def __init__(self, name, config, particle_map):
+    def __init__(self, name, config, particle_map, is_thrown=False):
         self.config = config
-        self.uniqueness_config = config["uniqueness"][name]
+        if is_thrown:
+            self.uniqueness_config = {"histograms": "all", "particles": "none", "folder": "thrown_histograms"}
+        else:
+            self.uniqueness_config = config["uniqueness"][name]
+        self.thrown = is_thrown
         self.histograms = self.uniqueness_config["histograms"]
         self.particle_map = particle_map
         if self.histograms == "all":
@@ -34,6 +38,8 @@ class Uniqueness:
                         self.particles.append(particle.get("name"))
         elif self.particles == "none":
             self.tag = "_allcombos"
+            if is_thrown:
+                self.tag = ""
             self.particles = []
         else:
             self.tag = f"_{name}"
@@ -65,7 +71,12 @@ class Uniqueness:
 
     def fill_hists(self, indent=3, n_dir=-1):
         outstring = ""
-        if self.cuts is not None:
+        if self.thrown:
+            for hist_name in self.histograms:
+                hist = Histogram(hist_name, self.config)
+                outstring += hist.fill_string(tag=self.tag, indent=indent, n_dir=n_dir)
+            return outstring
+        elif self.cuts is not None:
             outstring = "    " * indent + "if(!("
             outstring += " || ".join([self.config['cuts'][cut_name]["condition"] for cut_name in self.cuts])
             outstring += ")) {\n"
@@ -78,7 +89,9 @@ class Uniqueness:
 
     def fill_string(self, indent=2, n_dir=-1):
         outstring = ""
-        if len(self.particles) == 0:
+        if self.thrown:
+            outstring += self.fill_hists(indent=1)
+        elif len(self.particles) == 0:
             outstring += self.fill_hists(indent=2, n_dir=n_dir)
             outstring += "    " * indent + "}\n"
         elif len(self.particles) == 1:
