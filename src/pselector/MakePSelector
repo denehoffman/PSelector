@@ -77,6 +77,7 @@ void DSelector_{basename}::Init(TTree *locTree){{
     dFlatTreeName = "";"""
     source_text += f"""
     bool locInitializedPriorFlag = dInitializedFlag;
+    dSkipNoTriggerEvents = false;
     DSelector::Init(locTree);
     if(locInitializedPriorFlag){{return;}}
     dPreviousRunNumber = 0;
