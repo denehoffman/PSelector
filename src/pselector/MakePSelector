@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-from pselector.Elements import Uniqueness, Histogram, Boost, Cut, Weight, FlatBranch
-import ROOT as root
 import argparse
-from pathlib import Path
 import re
-from particle import Particle, ParticleNotFound, InvalidParticle
+from pathlib import Path
+
+import ROOT as root
+
 try:
-    import tomllib # native support in Python 3.11
-except ModuleNotFoundError:
+    import tomllib
+except:
     import tomli as tomllib
 
+from particle import InvalidParticle, Particle, ParticleNotFound
+
+from pselector.Elements import Boost, Cut, FlatBranch, Histogram, Uniqueness, Weight
+
+
 def get_header_thrown(config):
-    particle_map = config["particle_map"]
-    basename = config["basename"]
+    particle_map = config['particle_map']
+    basename = config['basename']
     header_text = f"""#ifndef DSelector_{basename}_h
 #define DSelector_{basename}_h
 
@@ -46,7 +51,7 @@ class DSelector_{basename} : public DSelector {{
         bool dIsPARAFlag; //else is PERP or AMO
         bool dIsMC;
 """
-    uniqueness = Uniqueness("thrown", config, [], is_thrown=True)
+    uniqueness = Uniqueness('thrown', config, [], is_thrown=True)
     header_text += uniqueness.header_hists()
     header_text += f"""
         ClassDef(DSelector_{basename}, 0);
@@ -56,45 +61,46 @@ class DSelector_{basename} : public DSelector {{
 """
     return header_text
 
+
 def get_source_thrown(config, cut_accidentals=False):
-    treename = config["treename"]
-    particle_map = config["particle_map"]
-    basename = config["basename"]
+    treename = config['treename']
+    particle_map = config['particle_map']
+    basename = config['basename']
     source_text = f"""#include "DSelector_{basename}.h"
 
 void DSelector_{basename}::Init(TTree *locTree){{
 
     dOutputFileName = "hist_{basename}.root";
     dOutputTreeFileName = "tree_{basename}.root";"""
-    if config.get("output"):
+    if config.get('output'):
         source_text += f"""
     dFlatTreeFileName = "flat_{basename}.root";
     dFlatTreeName = "kin";
     dSaveDefaultFlatBranches = false;"""
     else:
-        source_text += f"""
+        source_text += """
     dFlatTreeFileName = "";
     dFlatTreeName = "";"""
-    source_text += f"""
+    source_text += """
     bool locInitializedPriorFlag = dInitializedFlag;
     DSelector::Init(locTree);
-    if(locInitializedPriorFlag){{return;}}
+    if(locInitializedPriorFlag){return;}
     dPreviousRunNumber = 0;
     // HISTOGRAMS
 """
-    uniqueness = Uniqueness("thrown", config, [], is_thrown=True)
+    uniqueness = Uniqueness('thrown', config, [], is_thrown=True)
     source_text += uniqueness.init_hists()
-    if config.get("output"):
+    if config.get('output'):
         num_names = []
         source_text += """
     dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("RunNumber");
     dFlatTreeInterface->Create_Branch_Fundamental<ULong64_t>("EventNumber");
     dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("ComboNumber");
 """
-        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+        for flatbranch in [FlatBranch(name, config) for name in config['output'].keys()]:
             if flatbranch.isArray:
-                if not flatbranch.num_name in num_names:
-                    num_names.append(flatbranch.num_name) 
+                if flatbranch.num_name not in num_names:
+                    num_names.append(flatbranch.num_name)
                     source_text += flatbranch.init_num_string()
             source_text += flatbranch.init_string()
     source_text += f"""}}
@@ -110,36 +116,36 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 """
     source_text += uniqueness.init_string()
     # Get the beam vectors
-    vector_names = ["locBeamP4"]
-    source_text += f"    TLorentzVector locBeamP4 = dThrownBeam->Get_P4();\n"
-    source_text += f"    TLorentzVector locBeamX4 = dThrownBeam->Get_X4();\n"
+    vector_names = ['locBeamP4']
+    source_text += '    TLorentzVector locBeamP4 = dThrownBeam->Get_P4();\n'
+    source_text += '    TLorentzVector locBeamX4 = dThrownBeam->Get_X4();\n'
     # Get the thrown vectors
-    decaying_names = config["thrown"]["decaying"]
+    decaying_names = config['thrown']['decaying']
     for unique_name in set(decaying_names):
         if decaying_names.count(unique_name) == 1:
-            source_text += f"    TLorentzVector locDecaying{unique_name}P4;\n"
-            source_text += f"    TLorentzVector locDecaying{unique_name}X4;\n"
-            vector_names.append(f"locDecaying{unique_name}P4")
+            source_text += f'    TLorentzVector locDecaying{unique_name}P4;\n'
+            source_text += f'    TLorentzVector locDecaying{unique_name}X4;\n'
+            vector_names.append(f'locDecaying{unique_name}P4')
         else:
-            source_text += f"    int {unique_name}Counter = 1;\n"
+            source_text += f'    int {unique_name}Counter = 1;\n'
             for j in range(decaying_names.count(unique_name)):
-                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}P4;\n"
-                source_text += f"    TLorentzVector locDecaying{unique_name}{j + 1}X4;\n"
-                vector_names.append(f"locDecaying{unique_name}{j + 1}P4")
-    other_names = config["thrown"]["other"]
+                source_text += f'    TLorentzVector locDecaying{unique_name}{j + 1}P4;\n'
+                source_text += f'    TLorentzVector locDecaying{unique_name}{j + 1}X4;\n'
+                vector_names.append(f'locDecaying{unique_name}{j + 1}P4')
+    other_names = config['thrown']['other']
     for unique_name in set(other_names):
         if other_names.count(unique_name) == 1:
-            source_text += f"    TLorentzVector loc{unique_name}P4;\n"
-            source_text += f"    TLorentzVector loc{unique_name}X4;\n"
-            vector_names.append(f"loc{unique_name}P4")
+            source_text += f'    TLorentzVector loc{unique_name}P4;\n'
+            source_text += f'    TLorentzVector loc{unique_name}X4;\n'
+            vector_names.append(f'loc{unique_name}P4')
         else:
-            source_text += f"    int {unique_name}Counter = 1;\n"
+            source_text += f'    int {unique_name}Counter = 1;\n'
             for j in range(other_names.count(unique_name)):
-                source_text += f"    TLorentzVector loc{unique_name}{j + 1}P4;\n"
-                source_text += f"    TLorentzVector loc{unique_name}{j + 1}X4;\n"
-                vector_names.append(f"loc{unique_name}{j + 1}P4")
-    source_text += f"""
-    for(UInt_t i = 0; i < Get_NumThrown(); i++) {{
+                source_text += f'    TLorentzVector loc{unique_name}{j + 1}P4;\n'
+                source_text += f'    TLorentzVector loc{unique_name}{j + 1}X4;\n'
+                vector_names.append(f'loc{unique_name}{j + 1}P4')
+    source_text += """
+    for(UInt_t i = 0; i < Get_NumThrown(); i++) {
         dThrownWrapper->Set_ArrayIndex(i);
         Particle_t locPID = dThrownWrapper->Get_PID();
 """
@@ -151,15 +157,15 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         }}
 """
         else:
-            source_text += f"        if(locPID == {unique_name}) {{\n"
+            source_text += f'        if(locPID == {unique_name}) {{\n'
             for j in range(decaying_names.count(unique_name)):
                 source_text += f"""            if({unique_name}Counter == {j + 1}) {{
                 locDecaying{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
                 locDecaying{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
             }}
 """
-            source_text += f"            {unique_name}Counter += 1;\n"
-            source_text += f"        }}\n"
+            source_text += f'            {unique_name}Counter += 1;\n'
+            source_text += '        }\n'
     for unique_name in set(other_names):
         if other_names.count(unique_name) == 1:
             source_text += f"""        if(locPID == {unique_name}) {{
@@ -168,32 +174,32 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         }}
 """
         else:
-            source_text += f"        if(locPID == {unique_name}) {{\n"
+            source_text += f'        if(locPID == {unique_name}) {{\n'
             for j in range(other_names.count(unique_name)):
                 source_text += f"""            if({unique_name}Counter == {j + 1}) {{
                 loc{unique_name}{j + 1}P4 = dThrownWrapper->Get_P4();
                 loc{unique_name}{j + 1}X4 = dThrownWrapper->Get_X4();
             }}
 """
-            source_text += f"            {unique_name}Counter += 1;\n"
-            source_text += f"        }}\n"
-    source_text += f"    }}\n"
-    for key, val in config["vectors"].items():
-        source_text += f"    TLorentzVector {key} = {val};\n"
+            source_text += f'            {unique_name}Counter += 1;\n'
+            source_text += '        }\n'
+    source_text += '    }\n'
+    for key, val in config['vectors'].items():
+        source_text += f'    TLorentzVector {key} = {val};\n'
         vector_names.append(key)
-    source_text += "\n"
-    for boost in [Boost(name, config, vector_names) for name in config["boosts"].keys()]:
+    source_text += '\n'
+    for boost in [Boost(name, config, vector_names) for name in config['boosts'].keys()]:
         source_text += boost.boost_string(indent=1)
-        source_text += "\n\n"
-    for varname, varcode in config["variables"].items():
-        source_text += "\n"
-        source_text += f"    // {varname}\n"
+        source_text += '\n\n'
+    for varname, varcode in config['variables'].items():
+        source_text += '\n'
+        source_text += f'    // {varname}\n'
         for line in varcode.splitlines():
-            source_text += "    " + line + "\n"
-    source_text += "    Double_t locWeight = 1.0;\n"
+            source_text += '    ' + line + '\n'
+    source_text += '    Double_t locWeight = 1.0;\n'
     source_text += uniqueness.fill_string(indent=1)
-    source_text += "\n\n"
-    if config.get("output"):
+    source_text += '\n\n'
+    if config.get('output'):
         source_text += """
     // Fill labeling branches
     dFlatTreeInterface->Fill_Fundamental<UInt_t>("RunNumber", locRunNumber);
@@ -201,9 +207,9 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     dFlatTreeInterface->Fill_Fundamental<UInt_t>("ComboNumber", 0); // Thrown trees do not have combos
 """
     num_names = []
-    for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+    for flatbranch in [FlatBranch(name, config) for name in config['output'].keys()]:
         if flatbranch.isArray:
-            if not flatbranch.num_name in num_names:
+            if flatbranch.num_name not in num_names:
                 num_names.append(flatbranch.num_name)
                 source_text += flatbranch.fill_num_string(indent=1)
         source_text += flatbranch.fill_string(indent=1)
@@ -218,10 +224,11 @@ void DSelector_{basename}::Finalize(void) {{
 }}"""
     return source_text
 
+
 ############# WRITE HEADER ###############
 def get_header(config):
-    particle_map = config["particle_map"]
-    basename = config["basename"]
+    particle_map = config['particle_map']
+    basename = config['basename']
     header_text = f"""#ifndef DSelector_{basename}_h
 #define DSelector_{basename}_h
 
@@ -260,34 +267,34 @@ class DSelector_{basename} : public DSelector {{
 
 """
     for step_index, step_contents in enumerate(particle_map):
-        header_text += f"        // Step {step_index}\n"
-        header_text += f"        DParticleComboStep* dStep{step_index}Wrapper;\n"
+        header_text += f'        // Step {step_index}\n'
+        header_text += f'        DParticleComboStep* dStep{step_index}Wrapper;\n'
         for particle in step_contents:
-            if not particle.get("particle"):
+            if not particle.get('particle'):
                 continue
-            elif particle.get("name") == "ComboBeam":
-                header_text += "        DBeamParticle* dComboBeamWrapper;\n"
-            elif particle.get("name").startswith("Target"):
+            if particle.get('name') == 'ComboBeam':
+                header_text += '        DBeamParticle* dComboBeamWrapper;\n'
+            elif particle.get('name').startswith('Target'):
                 continue
-            elif particle.get("name").startswith("Decaying"):
-                if particle.get("index") < 0:
+            elif particle.get('name').startswith('Decaying'):
+                if particle.get('index') < 0:
                     header_text += f"        DKinematicData* d{particle.get('name')}Wrapper;\n"
-            elif particle.get("name").startswith("Missing"):
+            elif particle.get('name').startswith('Missing'):
                 header_text += f"        DKinematicData* d{particle.get('name')}Wrapper;\n"
-            elif particle.get("particle").charge != 0:
+            elif particle.get('particle').charge != 0:
                 header_text += f"        DChargedTrackHypothesis* d{particle.get('name')}Wrapper;\n"
             else:
                 header_text += f"        DNeutralParticleHypothesis* d{particle.get('name')}Wrapper;\n"
-        header_text += "\n"
-    header_text += "        // DEFINE YOUR HISTOGRAMS HERE\n"
+        header_text += '\n'
+    header_text += '        // DEFINE YOUR HISTOGRAMS HERE\n'
     # HISTOGRAM INITIALIZATIONS
-    n_folders = len(config["uniqueness"].keys())
-    if config["folders"]:
-        for hist_name in config["histograms"]: # make all possible histograms, only init the ones we want to fill later
+    n_folders = len(config['uniqueness'].keys())
+    if config['folders']:
+        for hist_name in config['histograms']:  # make all possible histograms, only init the ones we want to fill later
             hist = Histogram(hist_name, config)
-            header_text += hist.header_string(tag=f"[{n_folders}]", indent=2)
+            header_text += hist.header_string(tag=f'[{n_folders}]', indent=2)
     else:
-        for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
+        for uniqueness in [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]:
             header_text += uniqueness.header_hists()
     # END HISTOGRAM INITIALIZATIONS
     header_text += f"""\n    ClassDef(DSelector_{basename}, 0);
@@ -296,33 +303,36 @@ class DSelector_{basename} : public DSelector {{
 void DSelector_{basename}::Get_ComboWrappers(void) {{
 """
     for step_index, step_contents in enumerate(particle_map):
-        header_text += f"    // Step {step_index}\n"
-        header_text += f"    dStep{step_index}Wrapper = dComboWrapper->Get_ParticleComboStep({step_index});\n"
+        header_text += f'    // Step {step_index}\n'
+        header_text += f'    dStep{step_index}Wrapper = dComboWrapper->Get_ParticleComboStep({step_index});\n'
         for particle in step_contents:
-            if not particle.get("particle"):
+            if not particle.get('particle'):
                 continue
-            elif particle.get("name") == "ComboBeam":
-                header_text += f"    dComboBeamWrapper = static_cast<DBeamParticle*>(dStep{step_index}Wrapper->Get_InitialParticle());\n"
-            elif particle.get("name").startswith("Target"):
+            if particle.get('name') == 'ComboBeam':
+                header_text += f'    dComboBeamWrapper = static_cast<DBeamParticle*>(dStep{step_index}Wrapper->Get_InitialParticle());\n'
+            elif particle.get('name').startswith('Target'):
                 continue
-            elif particle.get("name").startswith("Decaying"):
-                if particle.get("index") < 0:
-                    header_text += f"    d{particle.get('name')}Wrapper = dStep{step_index}Wrapper->Get_InitialParticle();\n"
-            elif particle.get("name").startswith("Missing"):
+            elif particle.get('name').startswith('Decaying'):
+                if particle.get('index') < 0:
+                    header_text += (
+                        f"    d{particle.get('name')}Wrapper = dStep{step_index}Wrapper->Get_InitialParticle();\n"
+                    )
+            elif particle.get('name').startswith('Missing'):
                 header_text += f"    d{particle.get('name')}Wrapper = dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
-            elif particle.get("particle").charge != 0:
+            elif particle.get('particle').charge != 0:
                 header_text += f"    d{particle.get('name')}Wrapper = static_cast<DChargedTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
             else:
                 header_text += f"    d{particle.get('name')}Wrapper = static_cast<DNeutralParticleHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
-        header_text += "\n"
+        header_text += '\n'
 
-    header_text += f"}}\n\n#endif // DSelector_{basename}_h"
+    header_text += f'}}\n\n#endif // DSelector_{basename}_h'
     return header_text
 
+
 def get_source(config, cut_accidentals=False):
-    treename = config["treename"]
-    particle_map = config["particle_map"]
-    basename = config["basename"]
+    treename = config['treename']
+    particle_map = config['particle_map']
+    basename = config['basename']
     source_text = f"""#include "DSelector_{basename}.h"
 
 void DSelector_{basename}::Init(TTree *locTree) {{
@@ -330,13 +340,13 @@ void DSelector_{basename}::Init(TTree *locTree) {{
     dOutputFileName = "hist_{basename}.root";
     dOutputTreeFileName = "tree_{basename}.root";"""
 
-    if config.get("output"):
+    if config.get('output'):
         source_text += f"""
     dFlatTreeFileName = "flat_{basename}.root";
     dFlatTreeName = "kin";
     dSaveDefaultFlatBranches = false;"""
     else:
-        source_text += f"""
+        source_text += """
     dFlatTreeFileName = "";
     dFlatTreeName = "";"""
 
@@ -351,7 +361,7 @@ void DSelector_{basename}::Init(TTree *locTree) {{
 """
     ###################################### add analysis action stuff here if we want that
     # false/true is measured/kinfit
-    source_text += f"""    dAnalysisActions.push_back(new DHistogramAction_ParticleID(dComboWrapper, false));
+    source_text += """    dAnalysisActions.push_back(new DHistogramAction_ParticleID(dComboWrapper, false));
     dAnalysisActions.push_back(new DHistogramAction_PIDFOM(dComboWrapper));
     dAnalysisActions.push_back(new DHistogramAction_KinFitResults(dComboWrapper));
     dAnalysisActions.push_back(new DHistogramAction_BeamEnergy(dComboWrapper, false));
@@ -360,29 +370,33 @@ void DSelector_{basename}::Init(TTree *locTree) {{
     Initialize_Actions();
 
 """
-    source_text += "    // DEFINE HISTOGRAMS HERE\n"
+    source_text += '    // DEFINE HISTOGRAMS HERE\n'
     ###################################### uniqueness folder creation
-    n_folders = len(config["uniqueness"].keys())
+    n_folders = len(config['uniqueness'].keys())
     ###################################### add histograms
-    if n_folders > 1 and config["folders"]:
-        source_text += "    TDirectory *dir_main = gDirectory;\n"
-        for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
+    if n_folders > 1 and config['folders']:
+        source_text += '    TDirectory *dir_main = gDirectory;\n'
+        for uniqueness in [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]:
             source_text += uniqueness.folder_string()
-        folder_strings = [f"\"{Uniqueness(name, config, particle_map).folder_name}\"" for name in config["uniqueness"].keys()]
+        folder_strings = [
+            f'"{Uniqueness(name, config, particle_map).folder_name}"' for name in config['uniqueness'].keys()
+        ]
         source_text += f"    TString locDirectoryLabels[{n_folders}] = {{{', '.join(folder_strings)}}};\n"
-        for n_dir, uniqueness in enumerate([Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]):
-            source_text += f"    dir_main->cd(locDirectoryLabels[{n_dir}]);\n"
+        for n_dir, uniqueness in enumerate(
+            [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]
+        ):
+            source_text += f'    dir_main->cd(locDirectoryLabels[{n_dir}]);\n'
             source_text += uniqueness.init_hists(n_dir=n_dir)
     else:
-        for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
+        for uniqueness in [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]:
             source_text += uniqueness.init_hists()
 
-    source_text += "\n"
+    source_text += '\n'
 
     ###################################### custom main tree stuff
     ###################################### custom flat tree stuff
 
-    if config.get("output"):
+    if config.get('output'):
         num_names = []
         source_text += """
     // Event labeling branches
@@ -390,9 +404,9 @@ void DSelector_{basename}::Init(TTree *locTree) {{
     dFlatTreeInterface->Create_Branch_Fundamental<ULong64_t>("EventNumber");
     dFlatTreeInterface->Create_Branch_Fundamental<UInt_t>("ComboNumber");
 """
-        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+        for flatbranch in [FlatBranch(name, config) for name in config['output'].keys()]:
             if flatbranch.isArray:
-                if not flatbranch.num_name in num_names:
+                if flatbranch.num_name not in num_names:
                     num_names.append(flatbranch.num_name)
                     source_text += flatbranch.init_num_string()
             source_text += flatbranch.init_string()
@@ -416,89 +430,98 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
     }}
 
 """
-    source_text += f"""
+    source_text += """
     Reset_Actions_NewEvent();
 """
     ###################################### uniqueness tracking
-    for uniqueness in [Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]:
+    for uniqueness in [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]:
         source_text += uniqueness.init_string()
 
     ###################################### fill custom output branches
     ###################################### loop over combos
-    source_text += f"""
+    source_text += """
 
-    for(UInt_t loc_i = 0; loc_i < Get_NumCombos(); ++loc_i) {{
+    for(UInt_t loc_i = 0; loc_i < Get_NumCombos(); ++loc_i) {
 
         dComboWrapper->Set_ComboIndex(loc_i);
-        if(dComboWrapper->Get_IsComboCut()) {{
+        if(dComboWrapper->Get_IsComboCut()) {
             continue; // Ignore all combos cut in any previous analysis
-        }}
+        }
 
         // GET PARTICLE INDICES FOR UNIQUENESS TRACKING
 """
     for step_index, step_contents in enumerate(particle_map):
-        source_text += f"        // Step {step_index}\n"
+        source_text += f'        // Step {step_index}\n'
         for particle in step_contents:
-            if not particle.get("particle"):
+            if not particle.get('particle'):
                 continue
-            elif particle.get("name") == "ComboBeam":
-                source_text += "        Int_t locBeamID = dComboBeamWrapper->Get_BeamID();\n"
-            elif particle.get("name").startswith("Target"):
+            if particle.get('name') == 'ComboBeam':
+                source_text += '        Int_t locBeamID = dComboBeamWrapper->Get_BeamID();\n'
+            elif (
+                particle.get('name').startswith('Target')
+                or particle.get('name').startswith('Decaying')
+                or particle.get('name').startswith('Missing')
+            ):
                 continue
-            elif particle.get("name").startswith("Decaying"):
-                continue
-            elif particle.get("name").startswith("Missing"):
-                continue
-            elif particle.get("particle").charge != 0:
-                source_text += f"        Int_t loc{particle.get('name')}TrackID = d{particle.get('name')}Wrapper->Get_TrackID();\n"
+            elif particle.get('particle').charge != 0:
+                source_text += (
+                    f"        Int_t loc{particle.get('name')}TrackID = d{particle.get('name')}Wrapper->Get_TrackID();\n"
+                )
             else:
                 source_text += f"        Int_t loc{particle.get('name')}NeutralID = d{particle.get('name')}Wrapper->Get_NeutralID();\n"
-        source_text += "\n"
+        source_text += '\n'
 
     ###################################### Get four-vectors
     vector_names = []
     for step_index, step_contents in enumerate(particle_map):
-        source_text += f"        // Step {step_index}\n"
+        source_text += f'        // Step {step_index}\n'
         for particle in step_contents:
-            if not particle.get("particle"):
+            if not particle.get('particle'):
                 continue
-            elif particle.get("name") == "ComboBeam":
-                source_text += "        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n"
-                source_text += "        TLorentzVector locBeamP4_Measured = dComboBeamWrapper->Get_P4_Measured();\n"
-                source_text += "        TLorentzVector locBeamX4 = dComboBeamWrapper->Get_X4();\n"
-                source_text += "        TLorentzVector locBeamX4_Measured = dComboBeamWrapper->Get_X4_Measured();\n"
-                vector_names += ["locBeamP4", "locBeamP4_Measured"]
-            elif particle.get("name").startswith("Target"):
+            if particle.get('name') == 'ComboBeam':
+                source_text += '        TLorentzVector locBeamP4 = dComboBeamWrapper->Get_P4();\n'
+                source_text += '        TLorentzVector locBeamP4_Measured = dComboBeamWrapper->Get_P4_Measured();\n'
+                source_text += '        TLorentzVector locBeamX4 = dComboBeamWrapper->Get_X4();\n'
+                source_text += '        TLorentzVector locBeamX4_Measured = dComboBeamWrapper->Get_X4_Measured();\n'
+                vector_names += ['locBeamP4', 'locBeamP4_Measured']
+            elif particle.get('name').startswith('Target'):
                 continue
-            elif particle.get("name").startswith("Decaying"):
-                if particle.get("index") < 0:
+            elif particle.get('name').startswith('Decaying'):
+                if particle.get('index') < 0:
                     source_text += f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
                     source_text += f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
                     vector_names.append(f"loc{particle.get('name')}P4")
-            elif particle.get("name").startswith("Missing"):
-                source_text += f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
-                source_text += f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+            elif particle.get('name').startswith('Missing'):
+                source_text += (
+                    f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
+                )
+                source_text += (
+                    f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+                )
                 vector_names.append(f"loc{particle.get('name')}P4")
             else:
-                source_text += f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
+                source_text += (
+                    f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
+                )
                 source_text += f"        TLorentzVector loc{particle.get('name')}P4_Measured = d{particle.get('name')}Wrapper->Get_P4_Measured();\n"
-                source_text += f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+                source_text += (
+                    f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+                )
                 source_text += f"        TLorentzVector loc{particle.get('name')}X4_Measured = d{particle.get('name')}Wrapper->Get_X4_Measured();\n"
                 vector_names += [f"loc{particle.get('name')}P4", f"loc{particle.get('name')}P4_Measured"]
-        source_text += "\n"
+        source_text += '\n'
     # Define some particle-related vectors here
-    for key, val in config["vectors"].items():
-        source_text += f"        TLorentzVector {key} = {val};\n"
+    for key, val in config['vectors'].items():
+        source_text += f'        TLorentzVector {key} = {val};\n'
         vector_names.append(key)
-    source_text += "\n"
+    source_text += '\n'
     # Boosts
-    for boost in [Boost(name, config, vector_names) for name in config["boosts"].keys()]:
+    for boost in [Boost(name, config, vector_names) for name in config['boosts'].keys()]:
         source_text += boost.boost_string()
-
 
     ###################################### Old Accidental Weighting
     n_out_of_time = -1
-    num_from_treename = re.search("_B(\d+)", treename).group(1)
+    num_from_treename = re.search(r'_B(\d+)', treename).group(1)
     if num_from_treename:
         n_out_of_time = int(num_from_treename)
     source_text += """
@@ -521,11 +544,11 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         Double_t locWeight = locHistAccidWeightFactor;
 """
     # Define boost-related vectors here?
-    for varname, varcode in config["variables"].items():
-        source_text += "\n"
-        source_text += f"        // {varname}\n"
+    for varname, varcode in config['variables'].items():
+        source_text += '\n'
+        source_text += f'        // {varname}\n'
         for line in varcode.splitlines():
-            source_text += "        " + line + "\n"
+            source_text += '        ' + line + '\n'
 
     # Execute Analysis Actions
     source_text += """
@@ -535,27 +558,29 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
 """
 
     # Cuts
-    for cut in [Cut(name, config) for name in config["cuts"].keys()]:
-        source_text += f"\n        // CUT: {cut.name}\n"
+    for cut in [Cut(name, config) for name in config['cuts'].keys()]:
+        source_text += f'\n        // CUT: {cut.name}\n'
         source_text += cut.cut_string()
-    source_text += "\n\n"
+    source_text += '\n\n'
 
     # Weights
-    for weight in [Weight(name, config) for name in config["weights"].keys()]:
-        source_text += f"\n        // WEIGHT: {weight.name}\n"
+    for weight in [Weight(name, config) for name in config['weights'].keys()]:
+        source_text += f'\n        // WEIGHT: {weight.name}\n'
         source_text += weight.weight_string()
-    source_text += "\n\n"
+    source_text += '\n\n'
 
     # Fill Histograms
-    for n_dir, uniqueness in enumerate([Uniqueness(name, config, particle_map) for name in config["uniqueness"].keys()]):
-        if config["folders"]:
+    for n_dir, uniqueness in enumerate(
+        [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]
+    ):
+        if config['folders']:
             source_text += uniqueness.fill_string(n_dir=n_dir)
         else:
             source_text += uniqueness.fill_string()
 
     # Fill FlatTree (if applicable)
 
-    if config.get("output"):
+    if config.get('output'):
         source_text += """
         // Don't output combos that were cut
         if(dComboWrapper->Get_IsComboCut()) {
@@ -567,16 +592,16 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
         dFlatTreeInterface->Fill_Fundamental<UInt_t>("ComboNumber", loc_i);
 """
         num_names = []
-        for flatbranch in [FlatBranch(name, config) for name in config["output"].keys()]:
+        for flatbranch in [FlatBranch(name, config) for name in config['output'].keys()]:
             if flatbranch.isArray:
-                if not flatbranch.num_name in num_names:
+                if flatbranch.num_name not in num_names:
                     num_names.append(flatbranch.num_name)
                     source_text += flatbranch.fill_num_string()
             source_text += flatbranch.fill_string()
-        source_text += "        Fill_FlatTree();\n"
+        source_text += '        Fill_FlatTree();\n'
 
     # End Combo Loop
-    source_text += "    } // End of Combo Loop\n\n    Fill_NumCombosSurvivedHists();\n"
+    source_text += '    } // End of Combo Loop\n\n    Fill_NumCombosSurvivedHists();\n'
 
     # Fill output tree
     source_text += """
@@ -603,21 +628,20 @@ void DSelector_{basename}::Finalize(void) {{
     return source_text
 
 
-
 def get_particle_map(path):
     f = root.TFile(path)
     treename = str(f.GetListOfKeys()[0].GetName())
     tree = f.Get(treename)
     branches = [str(key.GetName()) for key in tree.GetListOfBranches()]
-    if "NumThrown" in branches:
+    if 'NumThrown' in branches:
         return treename, branches, [], True
     userinfo = tree.GetUserInfo()
-    name_to_pid = userinfo.FindObject("NameToPIDMap")
-    pos_to_name = userinfo.FindObject("PositionToNameMap")
+    name_to_pid = userinfo.FindObject('NameToPIDMap')
+    pos_to_name = userinfo.FindObject('PositionToNameMap')
     output = []
     for key in pos_to_name:
-        step_index = int(str(key.GetName()).split("_")[0])
-        particle_index = int(str(key.GetName()).split("_")[1])
+        step_index = int(str(key.GetName()).split('_')[0])
+        particle_index = int(str(key.GetName()).split('_')[1])
         particle_name = str(pos_to_name.GetValue(key).GetName())
         particle_pid = int(str(name_to_pid.GetValue(particle_name)))
         try:
@@ -627,19 +651,16 @@ def get_particle_map(path):
         except InvalidParticle:
             particle = None
         if step_index >= len(output):
-            output.append([{"index": particle_index,
-                            "name": particle_name,
-                            "pid": particle_pid,
-                            "particle": particle}])
+            output.append([{'index': particle_index, 'name': particle_name, 'pid': particle_pid, 'particle': particle}])
         else:
-            output[step_index].append({"index": particle_index,
-                                       "name": particle_name,
-                                       "pid": particle_pid,
-                                       "particle": particle})
+            output[step_index].append(
+                {'index': particle_index, 'name': particle_name, 'pid': particle_pid, 'particle': particle}
+            )
     output_sorted = []
     for step_list in output:
-        output_sorted.append(sorted(step_list, key=lambda d: d.get("index")))
+        output_sorted.append(sorted(step_list, key=lambda d: d.get('index')))
     return treename, branches, output_sorted, False
+
 
 def main():
     parser_desc = """
@@ -654,43 +675,50 @@ def main():
 ╰───────────────────────────────────────────────────────────╯
 """
     parser = argparse.ArgumentParser(description=parser_desc, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("config", help="path to configuration file")
-    parser.add_argument("-n", "--name", help="(optional) name for selector class and files, i.e. \"DSelector_<name>.C/.h\". Defaults to tree name without \"_Tree\"")
-    parser.add_argument("--no-folders", action="store_true", help="don't generate folders for each uniqueness block (may be faster but less organized)")
-    parser.add_argument("--cut-accidentals", action="store_true", help="cut accidentals rather than subtract them")
+    parser.add_argument('config', help='path to configuration file')
+    parser.add_argument(
+        '-n',
+        '--name',
+        help='(optional) name for selector class and files, i.e. "DSelector_<name>.C/.h". Defaults to tree name without "_Tree"',
+    )
+    parser.add_argument(
+        '--no-folders',
+        action='store_true',
+        help="don't generate folders for each uniqueness block (may be faster but less organized)",
+    )
+    parser.add_argument('--cut-accidentals', action='store_true', help='cut accidentals rather than subtract them')
     args = parser.parse_args()
     config_path = Path(args.config).resolve()
-    assert config_path.exists(), f"Could not access {str(config_path)}!"
-    print(f"Using {str(config_path)} to supplement DSelector generation")
-    with open(config_path, 'r') as stream:
-        config = tomllib.load(stream)
+    assert config_path.exists(), f'Could not access {config_path!s}!'
+    print(f'Using {config_path!s} to supplement DSelector generation')
+    config = tomllib.load(config_path.open('rb'))
 
-    input_path = Path(config["source"]).resolve()
-    assert input_path.exists(), f"Could not access {str(input_path)}!"
+    input_path = Path(config['source']).resolve()
+    assert input_path.exists(), f'Could not access {input_path!s}!'
     treename, branches, particle_map, is_thrown = get_particle_map(str(input_path))
     if args.name:
         basename = args.name
-    elif config.get("name"):
-        basename = config["name"]
+    elif config.get('name'):
+        basename = config['name']
     else:
-        basename = treename.replace("_Tree", "")
-    output_source_path = Path(".") / f"DSelector_{basename}.C"
-    output_header_path = Path(".") / f"DSelector_{basename}.h"
+        basename = treename.replace('_Tree', '')
+    output_source_path = config_path.parent / f'DSelector_{basename}.C'
+    output_header_path = config_path.parent / f'DSelector_{basename}.h'
 
-    print(f"Generating {str(output_source_path)} and {str(output_header_path)}...")
-    config["basename"] = basename
-    config["particle_map"] = particle_map
-    config["treename"] = treename
-    config["is_thrown"] = is_thrown
-    config["folders"] = not args.no_folders
-    config["vectors"] = config.get("vectors", {})
-    config["boosts"] = config.get("boosts", {})
-    config["variables"] = config.get("variables", {})
-    config["cuts"] = config.get("cuts", {})
-    config["weights"] = config.get("weights", {})
-    config["uniqueness"] = config.get("uniqueness", {})
-    config["histograms"] = config.get("histograms", {})
-    config["thrown"] = config.get("thrown", {"decaying": [], "other": []})
+    print(f'Generating {output_source_path!s} and {output_header_path!s}...')
+    config['basename'] = basename
+    config['particle_map'] = particle_map
+    config['treename'] = treename
+    config['is_thrown'] = is_thrown
+    config['folders'] = not args.no_folders
+    config['vectors'] = config.get('vectors', {})
+    config['boosts'] = config.get('boosts', {})
+    config['variables'] = config.get('variables', {})
+    config['cuts'] = config.get('cuts', {})
+    config['weights'] = config.get('weights', {})
+    config['uniqueness'] = config.get('uniqueness', {})
+    config['histograms'] = config.get('histograms', {})
+    config['thrown'] = config.get('thrown', {'decaying': [], 'other': []})
     with open(output_source_path, 'w') as source, open(output_header_path, 'w') as header:
         if is_thrown:
             source.write(get_source_thrown(config, cut_accidentals=args.cut_accidentals))
@@ -699,5 +727,6 @@ def main():
             source.write(get_source(config, cut_accidentals=args.cut_accidentals))
             header.write(get_header(config))
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     main()

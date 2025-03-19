@@ -1,15 +1,16 @@
 from setuptools import setup, find_packages
 from pathlib import Path
-SRC = Path(__file__).parent / "src/pselector"
+
+SRC = Path(__file__).parent / 'src/pselector'
 setup(
-    name="pselector",
-    version="1.1.2",
-    author="Nathaniel Dene Hoffman",
-    author_email="dene@cmu.edu",
-    maintainer="Nathaniel Dene Hoffman",
-    maintainer_email="dene@cmu.edu",
-    url="https://github.com/denehoffman/PSelector",
-    description="A tool to generate GlueX analysis DSelector code from a TOML config",
+    name='pselector',
+    version='1.1.3',
+    author='Nathaniel Dene Hoffman',
+    author_email='dene@cmu.edu',
+    maintainer='Nathaniel Dene Hoffman',
+    maintainer_email='dene@cmu.edu',
+    url='https://github.com/denehoffman/PSelector',
+    description='A tool to generate GlueX analysis DSelector code from a TOML config',
     long_description="""
     MakePSelector parses a TOML configuration file and generates C code for GlueX's
     DSelector, a modification of the ROOT TSelector class. Within the configuration
@@ -34,18 +35,18 @@ setup(
     Another example is the confusing syntax of uniquness tracking, which is simplified
     in MakePSelector, as well as the process for writing output trees and flat trees.
     """,
-    license="License :: OSI Approved :: MIT License",
+    license='License :: OSI Approved :: MIT License',
     classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Intended Audience :: Science/Research",
-        "Operating System :: OS Independent",
-        "Programming Language :: C",
-        "Programming Language :: Python :: 3 :: Only",
-        "Topic :: Scientific/Engineering :: Physics",
-        ],
-    packages=find_packages("src"),
-    package_dir={"": "src"},
-    scripts=[str(SRC / "MakePSelector")],
-    install_requires=["particle", 'tomli; python_version < "3.11"'],
-    zip_safe=False
+        'Development Status :: 5 - Production/Stable',
+        'Intended Audience :: Science/Research',
+        'Operating System :: OS Independent',
+        'Programming Language :: C',
+        'Programming Language :: Python :: 3 :: Only',
+        'Topic :: Scientific/Engineering :: Physics',
+    ],
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
+    scripts=[str(SRC / 'MakePSelector')],
+    install_requires=['particle', 'tomli; python_version < "3.11"'],
+    zip_safe=False,
 )
