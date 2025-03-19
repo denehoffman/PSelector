@@ -390,10 +390,10 @@ class FlatBranch:
             value = self.branch_config['value']
             outstring += (
                 '    ' * indent
-                + f"""TObjString** objStringPtr{self.branch_config['name']} = dFlatTreeInterface->Get_PointerToPointerTo_TObject<TObjString>("{self.branch_config['name']}");"""
+                + f"""TObjString** objStringPtr{self.branch_config['name']} = dFlatTreeInterface->Get_PointerToPointerTo_TObject<TObjString>("{self.branch_config['name']}");\n"""
             )
             outstring += (
-                '    ' * indent + f"""**objStringPtr{self.branch_config['name']} = TObjString({value}.Data());"""
+                '    ' * indent + f"""**objStringPtr{self.branch_config['name']} = TObjString({value}.Data());\n"""
             )
         else:
             dtype = self.branch_config['type']
