@@ -278,13 +278,13 @@ class DSelector_{basename} : public DSelector {{
                 continue
             elif particle.get('name').startswith('Decaying'):
                 if particle.get('index') < 0:
-                    header_text += f"        DKinematicData* d{particle.get('name')}Wrapper;\n"
+                    header_text += f'        DKinematicData* d{particle.get("name")}Wrapper;\n'
             elif particle.get('name').startswith('Missing'):
-                header_text += f"        DKinematicData* d{particle.get('name')}Wrapper;\n"
+                header_text += f'        DKinematicData* d{particle.get("name")}Wrapper;\n'
             elif particle.get('particle').charge != 0:
-                header_text += f"        DChargedTrackHypothesis* d{particle.get('name')}Wrapper;\n"
+                header_text += f'        DChargedTrackHypothesis* d{particle.get("name")}Wrapper;\n'
             else:
-                header_text += f"        DNeutralParticleHypothesis* d{particle.get('name')}Wrapper;\n"
+                header_text += f'        DNeutralParticleHypothesis* d{particle.get("name")}Wrapper;\n'
         header_text += '\n'
     header_text += '        // DEFINE YOUR HISTOGRAMS HERE\n'
     # HISTOGRAM INITIALIZATIONS
@@ -315,14 +315,14 @@ void DSelector_{basename}::Get_ComboWrappers(void) {{
             elif particle.get('name').startswith('Decaying'):
                 if particle.get('index') < 0:
                     header_text += (
-                        f"    d{particle.get('name')}Wrapper = dStep{step_index}Wrapper->Get_InitialParticle();\n"
+                        f'    d{particle.get("name")}Wrapper = dStep{step_index}Wrapper->Get_InitialParticle();\n'
                     )
             elif particle.get('name').startswith('Missing'):
-                header_text += f"    d{particle.get('name')}Wrapper = dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
+                header_text += f'    d{particle.get("name")}Wrapper = dStep{step_index}Wrapper->Get_FinalParticle({particle.get("index")}));\n'
             elif particle.get('particle').charge != 0:
-                header_text += f"    d{particle.get('name')}Wrapper = static_cast<DChargedTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
+                header_text += f'    d{particle.get("name")}Wrapper = static_cast<DChargedTrackHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get("index")}));\n'
             else:
-                header_text += f"    d{particle.get('name')}Wrapper = static_cast<DNeutralParticleHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get('index')}));\n"
+                header_text += f'    d{particle.get("name")}Wrapper = static_cast<DNeutralParticleHypothesis*>(dStep{step_index}Wrapper->Get_FinalParticle({particle.get("index")}));\n'
         header_text += '\n'
 
     header_text += f'}}\n\n#endif // DSelector_{basename}_h'
@@ -381,7 +381,7 @@ void DSelector_{basename}::Init(TTree *locTree) {{
         folder_strings = [
             f'"{Uniqueness(name, config, particle_map).folder_name}"' for name in config['uniqueness'].keys()
         ]
-        source_text += f"    TString locDirectoryLabels[{n_folders}] = {{{', '.join(folder_strings)}}};\n"
+        source_text += f'    TString locDirectoryLabels[{n_folders}] = {{{", ".join(folder_strings)}}};\n'
         for n_dir, uniqueness in enumerate(
             [Uniqueness(name, config, particle_map) for name in config['uniqueness'].keys()]
         ):
@@ -465,10 +465,10 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 continue
             elif particle.get('particle').charge != 0:
                 source_text += (
-                    f"        Int_t loc{particle.get('name')}TrackID = d{particle.get('name')}Wrapper->Get_TrackID();\n"
+                    f'        Int_t loc{particle.get("name")}TrackID = d{particle.get("name")}Wrapper->Get_TrackID();\n'
                 )
             else:
-                source_text += f"        Int_t loc{particle.get('name')}NeutralID = d{particle.get('name')}Wrapper->Get_NeutralID();\n"
+                source_text += f'        Int_t loc{particle.get("name")}NeutralID = d{particle.get("name")}Wrapper->Get_NeutralID();\n'
         source_text += '\n'
 
     ###################################### Get four-vectors
@@ -488,27 +488,27 @@ Bool_t DSelector_{basename}::Process(Long64_t locEntry) {{
                 continue
             elif particle.get('name').startswith('Decaying'):
                 if particle.get('index') < 0:
-                    source_text += f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
-                    source_text += f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
-                    vector_names.append(f"loc{particle.get('name')}P4")
+                    source_text += f'        TLorentzVector loc{particle.get("name")}P4 = d{particle.get("name")}Wrapper->Get_P4();\n'
+                    source_text += f'        TLorentzVector loc{particle.get("name")}X4 = d{particle.get("name")}Wrapper->Get_X4();\n'
+                    vector_names.append(f'loc{particle.get("name")}P4')
             elif particle.get('name').startswith('Missing'):
                 source_text += (
-                    f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
+                    f'        TLorentzVector loc{particle.get("name")}P4 = d{particle.get("name")}Wrapper->Get_P4();\n'
                 )
                 source_text += (
-                    f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+                    f'        TLorentzVector loc{particle.get("name")}X4 = d{particle.get("name")}Wrapper->Get_X4();\n'
                 )
-                vector_names.append(f"loc{particle.get('name')}P4")
+                vector_names.append(f'loc{particle.get("name")}P4')
             else:
                 source_text += (
-                    f"        TLorentzVector loc{particle.get('name')}P4 = d{particle.get('name')}Wrapper->Get_P4();\n"
+                    f'        TLorentzVector loc{particle.get("name")}P4 = d{particle.get("name")}Wrapper->Get_P4();\n'
                 )
-                source_text += f"        TLorentzVector loc{particle.get('name')}P4_Measured = d{particle.get('name')}Wrapper->Get_P4_Measured();\n"
+                source_text += f'        TLorentzVector loc{particle.get("name")}P4_Measured = d{particle.get("name")}Wrapper->Get_P4_Measured();\n'
                 source_text += (
-                    f"        TLorentzVector loc{particle.get('name')}X4 = d{particle.get('name')}Wrapper->Get_X4();\n"
+                    f'        TLorentzVector loc{particle.get("name")}X4 = d{particle.get("name")}Wrapper->Get_X4();\n'
                 )
-                source_text += f"        TLorentzVector loc{particle.get('name')}X4_Measured = d{particle.get('name')}Wrapper->Get_X4_Measured();\n"
-                vector_names += [f"loc{particle.get('name')}P4", f"loc{particle.get('name')}P4_Measured"]
+                source_text += f'        TLorentzVector loc{particle.get("name")}X4_Measured = d{particle.get("name")}Wrapper->Get_X4_Measured();\n'
+                vector_names += [f'loc{particle.get("name")}P4', f'loc{particle.get("name")}P4_Measured']
         source_text += '\n'
     # Define some particle-related vectors here
     for key, val in config['vectors'].items():
